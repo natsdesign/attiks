@@ -1,25 +1,69 @@
 {
   "expo": {
-    "name": "attiks-scaffold",
-    "slug": "attiks-scaffold",
+    "name": "Attiks",
+    "slug": "attiks",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
+    },
+    "scheme": "attiks",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.attiks.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0A0A0A",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "package": "com.attiks.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attiks accède à ta galerie pour ta photo de profil et ton score physique.",
+          "cameraPermission": "Attiks utilise ta caméra pour ta photo de profil et ton score physique."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Attiks sauvegarde tes cartes de séance dans ta galerie."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#C8F135",
+          "sounds": []
+        }
+      ]
+    ],
+    "experiments": {},
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a8700438-5808-413a-bd9e-2ea64efca3a9"
+      }
+    },
+    "owner": "nathan.saas"
   }
 }
