@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { GradientOrb } from '@/components/GradientOrb';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -35,8 +36,10 @@ export default function RegisterScreen() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#0A0D06' }}>
+      <GradientOrb />
     <KeyboardAvoidingView
-      className="flex-1 bg-surface"
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View className="flex-1 px-6 justify-center">
@@ -99,5 +102,6 @@ export default function RegisterScreen() {
         </Link>
       </View>
     </KeyboardAvoidingView>
+    </View>
   );
 }

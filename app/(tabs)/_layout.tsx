@@ -6,18 +6,17 @@ import { Icon, IconName } from '@/components/Icon';
 
 const BRAND = '#C8F135';
 const INACTIVE = '#4A5A3A';
-const BG = '#0D1108';
 const SURFACE = '#161D0F';
 
 const TAB_ICONS: Record<string, IconName> = {
-  index: 'house',
-  programs: 'barbell',
+  seance: 'barbell',
+  programs: 'list',
   history: 'clock',
   profile: 'user',
 };
 
 const TAB_LABELS: Record<string, string> = {
-  index: 'Accueil',
+  seance: 'Séance',
   programs: 'Programme',
   history: 'Historique',
   profile: 'Profil',
@@ -30,6 +29,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     <View style={[ss.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
       <View style={ss.bar}>
         {state.routes.map((route, index) => {
+          if (route.name === 'index') return null;
           const isFocused = state.index === index;
           const iconName = TAB_ICONS[route.name] as IconName;
           const label = TAB_LABELS[route.name];
@@ -67,10 +67,11 @@ export default function TabsLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Accueil' }} />
+      <Tabs.Screen name="seance" options={{ title: 'Séance' }} />
       <Tabs.Screen name="programs" options={{ title: 'Programme' }} />
       <Tabs.Screen name="history" options={{ title: 'Historique' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
+      <Tabs.Screen name="index" options={{ href: null }} />
     </Tabs>
   );
 }

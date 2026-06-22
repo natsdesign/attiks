@@ -21,7 +21,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { MuscleMap } from '@/components/MuscleMap';
 import { LogoAttiks } from '@/components/LogoAttiks';
-import { MUSCLE_RED, MUSCLE_ORANGE } from '@/hooks/useMuscleRecovery';
+import { GradientOrb } from '@/components/GradientOrb';
+import { MUSCLE_RED, MUSCLE_ORANGE, MuscleColors } from '@/hooks/useMuscleRecovery';
 
 type Goal = 'masse' | 'force' | 'les_deux';
 type Level = 'debutant' | 'intermediaire' | 'confirme' | 'expert';
@@ -30,8 +31,11 @@ type Equipment = 'salle_complete' | 'petite_salle' | 'domicile' | 'specifique';
 type Structure = 'ppl' | 'full_body' | 'haut_bas' | 'je_sais_pas';
 
 const BRAND = '#C8F135';
-const BG = '#0D110A';
-const SURFACE = '#111111';
+const BG = '#0a0d06';
+const CARD_BG = 'rgba(22,29,15,0.85)';
+const TEXT_MUTED = '#59644c';
+const CARD_BORDER = 'rgba(200,241,53,0.22)';
+const CTA_BORDER  = 'rgba(200,241,53,0.45)';
 
 const TESTIMONIALS = [
   {
@@ -61,8 +65,7 @@ const STEP_NUM: Record<number, string> = {
   7: '6', 8: '7', 9: '8', 11: '9',
 };
 
-// Couleurs de démo pour le pantin (screen 10) — simule une séance Push la veille
-const DEMO_MUSCLE_COLORS = {
+const DEMO_MUSCLE_COLORS: MuscleColors = {
   pec: MUSCLE_RED,
   'pec-2': MUSCLE_RED,
   triceps: MUSCLE_ORANGE,
@@ -71,6 +74,8 @@ const DEMO_MUSCLE_COLORS = {
 };
 
 const MOCK_ATHLETES = ['Chris Hemsworth', 'David Laid', 'Jeff Nippard', 'Ryan Terry', 'Steve Cook'];
+
+// Simulation de blur gaussien par 5 cercles concentriques — approxime filter:blur(150px)
 
 export default function OnboardScreen() {
   const router = useRouter();
@@ -102,7 +107,7 @@ export default function OnboardScreen() {
   const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scoreTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [displayScore, setDisplayScore] = useState(0);
-  const [score] = useState(() => Math.floor(Math.random() * 16) + 78); // fallback si pas de photo
+  const [score] = useState(() => Math.floor(Math.random() * 16) + 78);
   const [mockAthlete] = useState(() => MOCK_ATHLETES[Math.floor(Math.random() * MOCK_ATHLETES.length)]);
   const [analyzing, setAnalyzing] = useState(false);
   const [physiqueScore, setPhysiqueScore] = useState<{
@@ -115,12 +120,10 @@ export default function OnboardScreen() {
     potential: string;
   } | null>(null);
 
-  // Reset le choix charges quand on revient sur l'écran
   useEffect(() => {
     if (step === 6) setHasCharges(null);
   }, [step]);
 
-  // Progress bar
   useEffect(() => {
     if (step in STEP_PROGRESS) {
       Animated.timing(mainProgress, {
@@ -131,7 +134,6 @@ export default function OnboardScreen() {
     }
   }, [step]);
 
-  // Bienvenue animation + auto-advance
   useEffect(() => {
     if (step !== 1) return;
     welcomeFade.setValue(0);
@@ -144,7 +146,6 @@ export default function OnboardScreen() {
     return () => { if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current); };
   }, [step]);
 
-  // Score counter — utilise le vrai score si la photo a été analysée
   useEffect(() => {
     if (step !== 12) return;
     setDisplayScore(0);
@@ -238,28 +239,37 @@ export default function OnboardScreen() {
   // ── Écran 1 — Prénom ─────────────────────────────────────────
   if (step === 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: SURFACE }}>
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <GradientOrb />
         <SafeAreaView style={{ flex: 1, paddingHorizontal: 28 }}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
             <View style={{ flex: 1, justifyContent: 'center' }}>
-              <LogoAttiks width={72} height={58} />
-              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 42, lineHeight: 46, marginBottom: 12 }}>
-                Comment{'\n'}on t'appelle ?
+              <LogoAttiks width={49} height={40} style={{ marginBottom: 40 }} />
+              <Text style={{
+                color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+                letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 10,
+              }}>
+                Comment on{'\n'}t'appelle ?
               </Text>
-              <Text style={{ color: '#666', fontSize: 15, lineHeight: 22, marginBottom: 40 }}>
-                On va personnaliser toute{'\n'}ton expérience à partir de ça.
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 40 }}>
+                On va personnaliser toute ton expérience à partir de ça.
               </Text>
               <View style={{
-                backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A',
-                borderRadius: 16, paddingHorizontal: 20, height: 64, justifyContent: 'center',
+                backgroundColor: CARD_BG,
+                borderWidth: 1,
+                borderColor: 'rgba(200,241,53,0.35)',
+                borderRadius: 16,
+                paddingHorizontal: 20,
+                height: 64,
+                justifyContent: 'center',
               }}>
                 <TextInput
-                  style={{ color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 }}
+                  style={{ color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}
                   placeholder="Ton prénom"
-                  placeholderTextColor="#2E2E2E"
+                  placeholderTextColor="rgba(200,241,53,0.2)"
                   value={firstName}
                   onChangeText={setFirstName}
                   autoFocus
@@ -273,15 +283,19 @@ export default function OnboardScreen() {
               onPress={next}
               disabled={!firstNameValid}
               style={{
-                height: 64, borderRadius: 20,
-                backgroundColor: firstNameValid ? BRAND : '#1A1A1A',
-                borderWidth: firstNameValid ? 0 : 1, borderColor: '#2A2A2A',
-                alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+                height: 60,
+                borderRadius: 40,
+                backgroundColor: firstNameValid ? 'rgba(200,241,53,0.4)' : 'rgba(200,241,53,0.06)',
+                borderWidth: 1,
+                borderColor: firstNameValid ? CTA_BORDER : 'rgba(200,241,53,0.12)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
               }}
             >
               <Text style={{
                 fontWeight: '900', fontSize: 17,
-                color: firstNameValid ? '#000' : '#444',
+                color: firstNameValid ? '#fff' : TEXT_MUTED,
               }}>
                 C'est parti →
               </Text>
@@ -296,22 +310,22 @@ export default function OnboardScreen() {
   if (step === 1) {
     return (
       <View style={{ flex: 1, backgroundColor: BG }}>
-        <LinearGradient
-          colors={['rgba(200,241,53,0.10)', 'transparent']}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}
-        />
+        <GradientOrb />
         <SafeAreaView style={{ flex: 1, paddingHorizontal: 28, justifyContent: 'center' }}>
           <Animated.View style={{ opacity: welcomeFade, transform: [{ scale: welcomeScale }] }}>
-            <Text style={{ color: '#555', fontSize: 17, fontWeight: '400', marginBottom: 8 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 17, fontWeight: '400', marginBottom: 8 }}>
               Bienvenue,
             </Text>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 54, lineHeight: 58, letterSpacing: -1 }}>
+            <Text style={{
+              color: '#fff', fontWeight: '900', fontSize: 54, lineHeight: 52,
+              letterSpacing: -1.5, textTransform: 'uppercase',
+            }}>
               {firstName}.
             </Text>
-            <View style={{ height: 28 }} />
+            <View style={{ height: 32 }} />
             <LogoAttiks width={110} height={88} />
             <View style={{ height: 20 }} />
-            <Text style={{ color: '#555', fontSize: 16, lineHeight: 26 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 16, lineHeight: 26 }}>
               Le carnet de muscu{'\n'}le plus intelligent.
             </Text>
           </Animated.View>
@@ -324,24 +338,33 @@ export default function OnboardScreen() {
   if (step === 10) {
     return (
       <View style={{ flex: 1, backgroundColor: BG }}>
+        <GradientOrb />
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 44, paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
           >
+            <LogoAttiks width={40} height={32} style={{ marginBottom: 24 }} />
             <Text style={{ color: BRAND, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>
               Feature signature
             </Text>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 12 }}>
+            <Text style={{
+              color: '#fff', fontWeight: '900', fontSize: 40, lineHeight: 38,
+              letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 12,
+            }}>
               Ton corps te dit{'\n'}quand pousser.
             </Text>
-            <Text style={{ color: '#666', fontSize: 14, lineHeight: 22, marginBottom: 28 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 22, marginBottom: 28 }}>
               Attiks analyse tes séances et colorie chaque muscle selon sa récupération — en temps réel.
             </Text>
 
             <View style={{
-              backgroundColor: '#161D0F', borderRadius: 20, borderWidth: 1,
-              borderColor: 'rgba(200,241,53,0.12)', padding: 20, marginBottom: 20,
+              backgroundColor: 'rgba(22,29,15,0.8)',
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(200,241,53,0.18)',
+              padding: 20,
+              marginBottom: 20,
             }}>
               <MuscleMap muscleColors={DEMO_MUSCLE_COLORS} compact />
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 16 }}>
@@ -368,7 +391,7 @@ export default function OnboardScreen() {
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: BRAND, marginTop: 7 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{title}</Text>
-                    <Text style={{ color: '#666', fontSize: 12, marginTop: 2, lineHeight: 17 }}>{sub}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 2, lineHeight: 17 }}>{sub}</Text>
                   </View>
                 </View>
               ))}
@@ -376,9 +399,17 @@ export default function OnboardScreen() {
 
             <Pressable
               onPress={next}
-              style={{ backgroundColor: BRAND, borderRadius: 20, height: 56, alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                backgroundColor: 'rgba(200,241,53,0.4)',
+                borderWidth: 1,
+                borderColor: CTA_BORDER,
+                borderRadius: 40,
+                height: 60,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Text style={{ color: '#000', fontWeight: '900', fontSize: 16 }}>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>
                 Impressionnant, continuons →
               </Text>
             </Pressable>
@@ -400,22 +431,19 @@ export default function OnboardScreen() {
     );
     return (
       <View style={{ flex: 1, backgroundColor: BG }}>
-        <LinearGradient
-          colors={['rgba(200,241,53,0.12)', 'transparent']}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 280 }}
-        />
+        <GradientOrb />
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 40, paddingBottom: 40, alignItems: 'center' }}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={{ color: '#555', fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center', marginBottom: 24 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center', marginBottom: 24 }}>
               Ton score physique
             </Text>
             <Text style={{ color: BRAND, fontWeight: '900', fontSize: 108, lineHeight: 116, textAlign: 'center' }}>
               {displayScore}
             </Text>
-            <Text style={{ color: '#555', fontSize: 18, textAlign: 'center', marginBottom: 20 }}>/ 100</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 18, textAlign: 'center', marginBottom: 20 }}>/ 100</Text>
 
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15, textAlign: 'center', marginBottom: 4, lineHeight: 22 }}>
               {revealed ? potential : '...'}
@@ -430,31 +458,48 @@ export default function OnboardScreen() {
             {revealed && physiqueScore && (
               <View style={{ width: '100%', gap: 10, marginBottom: 32 }}>
                 {physiqueScore.strengths.map((s) => (
-                  <View key={s} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(200,241,53,0.06)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
+                  <View key={s} style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                    backgroundColor: 'rgba(200,241,53,0.06)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+                    borderWidth: 1, borderColor: 'rgba(200,241,53,0.15)',
+                  }}>
                     <Text style={{ color: BRAND, fontSize: 14 }}>✓</Text>
                     <Text style={{ color: '#ccc', fontSize: 13, flex: 1 }}>{s}</Text>
                   </View>
                 ))}
                 {physiqueScore.improvements.map((s) => (
-                  <View key={s} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1A1A1A', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
-                    <Text style={{ color: '#555', fontSize: 14 }}>↑</Text>
-                    <Text style={{ color: '#666', fontSize: 13, flex: 1 }}>{s}</Text>
+                  <View key={s} style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                    backgroundColor: CARD_BG, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+                    borderWidth: 1, borderColor: 'rgba(200,241,53,0.1)',
+                  }}>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>↑</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 13, flex: 1 }}>{s}</Text>
                   </View>
                 ))}
               </View>
             )}
 
             {!physiqueScore && revealed && (
-              <Text style={{ color: '#444', fontSize: 12, textAlign: 'center', marginBottom: 32, lineHeight: 18 }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginBottom: 32, lineHeight: 18 }}>
                 Basé sur ton profil, ton niveau{'\n'}et tes objectifs déclarés.
               </Text>
             )}
 
             <Pressable
               onPress={next}
-              style={{ width: '100%', backgroundColor: BRAND, borderRadius: 20, height: 56, alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                width: '100%',
+                backgroundColor: 'rgba(200,241,53,0.4)',
+                borderWidth: 1,
+                borderColor: CTA_BORDER,
+                borderRadius: 40,
+                height: 60,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Text style={{ color: '#000', fontWeight: '900', fontSize: 16 }}>Continuer →</Text>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Continuer →</Text>
             </Pressable>
           </ScrollView>
         </SafeAreaView>
@@ -465,18 +510,22 @@ export default function OnboardScreen() {
   // ── Écran 14 — Social proof + Paywall ────────────────────────
   if (step === 13) {
     return (
-      <View style={{ flex: 1, backgroundColor: SURFACE }}>
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <GradientOrb />
         <SafeAreaView style={{ flex: 1, paddingBottom: 0 }}>
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 36, paddingBottom: 8 }}
             showsVerticalScrollIndicator={false}
           >
             <Text style={{ color: BRAND, fontWeight: '900', fontSize: 80, textAlign: 'center', lineHeight: 86 }}>7</Text>
-            <Text style={{ color: '#666', fontSize: 15, textAlign: 'center', marginBottom: 20 }}>jours d'essai gratuit</Text>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 30, textAlign: 'center', lineHeight: 34, marginBottom: 8 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 15, textAlign: 'center', marginBottom: 20 }}>jours d'essai gratuit</Text>
+            <Text style={{
+              color: '#fff', fontWeight: '900', fontSize: 32, textAlign: 'center', lineHeight: 34,
+              letterSpacing: -1, textTransform: 'uppercase', marginBottom: 8,
+            }}>
               Rejoins les athlètes{'\n'}qui progressent vraiment.
             </Text>
-            <Text style={{ color: '#666', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
               Puis 9,99 €/mois ou 59,99 €/an{'\n'}Annulable à tout moment.
             </Text>
 
@@ -486,31 +535,46 @@ export default function OnboardScreen() {
               ['🧠', 'Récupération intelligente', 'Le pantin musculaire te dit quand pousser'],
               ['🏆', 'Carte de partage', 'Montre tes gains — viralité garantie'],
             ] as [string, string, string][]).map(([icon, title, sub]) => (
-              <View key={title} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 18 }}>
-                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(200,241,53,0.12)', alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2 }}>
+              <View key={title} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 }}>
+                <View style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  backgroundColor: 'rgba(200,241,53,0.1)',
+                  borderWidth: 1, borderColor: 'rgba(200,241,53,0.18)',
+                  alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2,
+                }}>
                   <Text style={{ fontSize: 18 }}>{icon}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{title}</Text>
-                  <Text style={{ color: '#666', fontSize: 12, marginTop: 2, lineHeight: 17 }}>{sub}</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 2, lineHeight: 17 }}>{sub}</Text>
                 </View>
               </View>
             ))}
 
             <View style={{ gap: 10, marginTop: 8, marginBottom: 12 }}>
               {TESTIMONIALS.map((t) => (
-                <View key={t.name} style={{ backgroundColor: '#1A1A1A', borderRadius: 16, borderWidth: 1, borderColor: '#2A2A2A', padding: 14 }}>
+                <View key={t.name} style={{
+                  backgroundColor: CARD_BG,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(200,241,53,0.15)',
+                  padding: 14,
+                }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(200,241,53,0.12)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                    <View style={{
+                      width: 32, height: 32, borderRadius: 16,
+                      backgroundColor: 'rgba(200,241,53,0.12)',
+                      alignItems: 'center', justifyContent: 'center', marginRight: 10,
+                    }}>
                       <Text style={{ color: BRAND, fontWeight: '900', fontSize: 12 }}>{t.name[0]}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>{t.name}</Text>
-                      <Text style={{ color: '#444', fontSize: 11 }}>{t.meta}</Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>{t.meta}</Text>
                     </View>
                     <Text style={{ color: BRAND, fontSize: 11 }}>★★★★★</Text>
                   </View>
-                  <Text style={{ color: '#666', fontSize: 12, lineHeight: 17, fontStyle: 'italic' }}>{t.text}</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 12, lineHeight: 17, fontStyle: 'italic' }}>{t.text}</Text>
                 </View>
               ))}
             </View>
@@ -519,15 +583,23 @@ export default function OnboardScreen() {
           <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
             <Pressable
               onPress={finish}
-              style={{ backgroundColor: BRAND, borderRadius: 20, height: 60, alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                backgroundColor: 'rgba(200,241,53,0.4)',
+                borderWidth: 1,
+                borderColor: CTA_BORDER,
+                borderRadius: 40,
+                height: 60,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Text style={{ color: '#000', fontWeight: '900', fontSize: 16 }}>Commencer l'essai gratuit</Text>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Commencer l'essai gratuit</Text>
             </Pressable>
             <Pressable
               onPress={finish}
               style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={{ color: '#444', fontSize: 13 }}>Continuer sans abonnement</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>Continuer sans abonnement</Text>
             </Pressable>
           </View>
         </SafeAreaView>
@@ -541,9 +613,10 @@ export default function OnboardScreen() {
   const showBack = (step >= 2 && step <= 9) || step === 11;
 
   return (
-    <View style={{ flex: 1, backgroundColor: SURFACE }}>
+    <View style={{ flex: 1, backgroundColor: BG }}>
+      <GradientOrb />
       {/* Barre de progression */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#1A1A1A', zIndex: 10 }}>
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: 'rgba(200,241,53,0.1)', zIndex: 10 }}>
         <Animated.View style={{
           height: '100%',
           backgroundColor: BRAND,
@@ -556,12 +629,12 @@ export default function OnboardScreen() {
           <View style={{ width: 36 }}>
             {showBack && (
               <Pressable onPress={back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                <Text style={{ color: '#555', fontSize: 26 }}>‹</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 26 }}>‹</Text>
               </Pressable>
             )}
           </View>
           {STEP_NUM[step] && (
-            <Text style={{ color: '#333', fontSize: 12 }}>{STEP_NUM[step]} / 9</Text>
+            <Text style={{ color: 'rgba(200,241,53,0.3)', fontSize: 12 }}>{STEP_NUM[step]} / 9</Text>
           )}
           <View style={{ width: 36 }} />
         </View>
@@ -577,14 +650,20 @@ export default function OnboardScreen() {
 
       // ── Étape 3 — Objectif ──────────────────────────────────
       case 2: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
             Qu'est-ce qui{'\n'}t'amène ?
           </Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 28 }}>Ton objectif guide tout le programme.</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
+            Ton objectif guide tout le programme.
+          </Text>
           <View style={{ gap: 10 }}>
             {([
-              { v: 'masse' as Goal,    emoji: '🏋️', label: 'Prendre de la masse', sub: 'Volume, hypertrophie, prendre du poids' },
+              { v: 'masse' as Goal,    emoji: '💪', label: 'Prendre de la masse', sub: 'Volume, hypertrophie, prendre du poids' },
               { v: 'force' as Goal,    emoji: '⚡',  label: 'Gagner en force',     sub: 'Soulever plus lourd, devenir plus fort' },
               { v: 'les_deux' as Goal, emoji: '🎯',  label: 'Les deux',            sub: 'Force et muscle en même temps' },
             ]).map(({ v, emoji, label, sub }) => (
@@ -592,16 +671,16 @@ export default function OnboardScreen() {
                 key={v}
                 onPress={() => { setGoal(v); next(); }}
                 style={{
-                  flexDirection: 'row', alignItems: 'center', padding: 20,
-                  borderRadius: 20, borderWidth: 1,
-                  backgroundColor: goal === v ? 'rgba(200,241,53,0.08)' : '#1A1A1A',
-                  borderColor: goal === v ? BRAND : '#2A2A2A',
+                  flexDirection: 'row', alignItems: 'center', padding: 18,
+                  borderRadius: 16, borderWidth: 1,
+                  backgroundColor: goal === v ? 'rgba(200,241,53,0.12)' : CARD_BG,
+                  borderColor: CARD_BORDER,
                 }}
               >
-                <Text style={{ fontSize: 30, marginRight: 16 }}>{emoji}</Text>
+                <Text style={{ fontSize: 28, marginRight: 16 }}>{emoji}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: goal === v ? BRAND : '#fff', fontWeight: '700', fontSize: 16 }}>{label}</Text>
-                  <Text style={{ color: '#555', fontSize: 13, marginTop: 3 }}>{sub}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 3 }}>{sub}</Text>
                 </View>
                 {goal === v && <Text style={{ color: BRAND, fontWeight: '900', fontSize: 16 }}>✓</Text>}
               </Pressable>
@@ -612,11 +691,15 @@ export default function OnboardScreen() {
 
       // ── Étape 4 — Niveau ────────────────────────────────────
       case 3: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
             Depuis combien de{'\n'}temps tu t'entraînes ?
           </Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
             Influence la récupération, le volume et la difficulté.
           </Text>
           <View style={{ gap: 10 }}>
@@ -631,15 +714,15 @@ export default function OnboardScreen() {
                 onPress={() => { setLevel(v); next(); }}
                 style={{
                   flexDirection: 'row', alignItems: 'center', padding: 18,
-                  borderRadius: 20, borderWidth: 1,
-                  backgroundColor: level === v ? 'rgba(200,241,53,0.08)' : '#1A1A1A',
-                  borderColor: level === v ? BRAND : '#2A2A2A',
+                  borderRadius: 16, borderWidth: 1,
+                  backgroundColor: level === v ? 'rgba(200,241,53,0.12)' : CARD_BG,
+                  borderColor: CARD_BORDER,
                 }}
               >
-                <Text style={{ fontSize: 28, marginRight: 16 }}>{emoji}</Text>
+                <Text style={{ fontSize: 26, marginRight: 16 }}>{emoji}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: level === v ? BRAND : '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
-                  <Text style={{ color: '#555', fontSize: 13, marginTop: 3 }}>{sub}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 3 }}>{sub}</Text>
                 </View>
                 {level === v && <Text style={{ color: BRAND, fontWeight: '900' }}>✓</Text>}
               </Pressable>
@@ -650,9 +733,15 @@ export default function OnboardScreen() {
 
       // ── Étape 5 — Genre ─────────────────────────────────────
       case 4: return (
-        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>Tu es ?</Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
+        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
+            Tu es ?
+          </Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
             Pour adapter les références de charges et les visuels.
           </Text>
           <View style={{ gap: 12 }}>
@@ -664,13 +753,13 @@ export default function OnboardScreen() {
                 key={v}
                 onPress={() => { setGender(v); next(); }}
                 style={{
-                  padding: 24, borderRadius: 20, borderWidth: 1,
-                  backgroundColor: gender === v ? 'rgba(200,241,53,0.08)' : '#1A1A1A',
-                  borderColor: gender === v ? BRAND : '#2A2A2A',
+                  padding: 24, borderRadius: 16, borderWidth: 1,
+                  backgroundColor: gender === v ? 'rgba(200,241,53,0.12)' : CARD_BG,
+                  borderColor: CARD_BORDER,
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ color: gender === v ? BRAND : '#fff', fontWeight: '900', fontSize: 24 }}>{label}</Text>
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 22, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Text>
               </Pressable>
             ))}
           </View>
@@ -680,11 +769,15 @@ export default function OnboardScreen() {
       // ── Étape 6 — Âge + Mensurations ───────────────────────
       case 5: return (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 40 }}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+          <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 40 }}>
+            <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+            <Text style={{
+              color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+              letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+            }}>
               Quelques chiffres.
             </Text>
-            <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
               Pour calibrer tes charges dès la première séance.
             </Text>
             <View style={{ gap: 16, marginBottom: 36 }}>
@@ -694,19 +787,27 @@ export default function OnboardScreen() {
                 { label: 'Poids actuel', placeholder: '80', unit: 'kg', value: weightKg, set: setWeightKg, keyboard: 'decimal-pad' as const },
               ]).map(({ label, placeholder, unit, value, set, keyboard }) => (
                 <View key={label}>
-                  <Text style={{ color: '#555', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>
                     {label}
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 16, paddingHorizontal: 16, height: 56 }}>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: CARD_BG,
+                    borderWidth: 1,
+                    borderColor: 'rgba(200,241,53,0.25)',
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                    height: 56,
+                  }}>
                     <TextInput
                       style={{ flex: 1, color: '#fff', fontSize: 18, fontWeight: '700' }}
                       placeholder={placeholder}
-                      placeholderTextColor="#2E2E2E"
+                      placeholderTextColor="rgba(200,241,53,0.15)"
                       value={value}
                       onChangeText={set}
                       keyboardType={keyboard}
                     />
-                    <Text style={{ color: '#444', fontSize: 14, fontWeight: '600' }}>{unit}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>{unit}</Text>
                   </View>
                 </View>
               ))}
@@ -715,18 +816,22 @@ export default function OnboardScreen() {
               onPress={next}
               disabled={!measurementsValid}
               style={{
-                height: 56, borderRadius: 16,
-                backgroundColor: measurementsValid ? BRAND : '#1A1A1A',
-                borderWidth: measurementsValid ? 0 : 1, borderColor: '#2A2A2A',
-                alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+                height: 60,
+                borderRadius: 40,
+                backgroundColor: measurementsValid ? 'rgba(200,241,53,0.4)' : 'rgba(200,241,53,0.06)',
+                borderWidth: 1,
+                borderColor: measurementsValid ? CTA_BORDER : 'rgba(200,241,53,0.12)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
               }}
             >
-              <Text style={{ fontWeight: '900', fontSize: 16, color: measurementsValid ? '#000' : '#444' }}>
+              <Text style={{ fontWeight: '900', fontSize: 16, color: measurementsValid ? '#fff' : TEXT_MUTED }}>
                 Continuer →
               </Text>
             </Pressable>
             <Pressable onPress={next} style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#333', fontSize: 13 }}>Passer cette étape</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>Passer cette étape</Text>
             </Pressable>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -737,11 +842,15 @@ export default function OnboardScreen() {
         if (hasCharges === true) {
           return (
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-              <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 40 }}>
-                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+              <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 40 }}>
+                <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+                <Text style={{
+                  color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+                  letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+                }}>
                   Tes charges actuelles.
                 </Text>
-                <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
                   Ton 1RM estimé sera calculé automatiquement.
                 </Text>
                 <View style={{ gap: 16, marginBottom: 36 }}>
@@ -751,31 +860,48 @@ export default function OnboardScreen() {
                     { label: 'Soulevé de terre', placeholder: '120', value: deadliftKg, set: setDeadliftKg },
                   ]).map(({ label, placeholder, value, set }) => (
                     <View key={label}>
-                      <Text style={{ color: '#555', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>
                         {label}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 16, paddingHorizontal: 16, height: 56 }}>
+                      <View style={{
+                        flexDirection: 'row', alignItems: 'center',
+                        backgroundColor: CARD_BG,
+                        borderWidth: 1,
+                        borderColor: 'rgba(200,241,53,0.25)',
+                        borderRadius: 16,
+                        paddingHorizontal: 16,
+                        height: 56,
+                      }}>
                         <TextInput
                           style={{ flex: 1, color: '#fff', fontSize: 18, fontWeight: '700' }}
                           placeholder={placeholder}
-                          placeholderTextColor="#2E2E2E"
+                          placeholderTextColor="rgba(200,241,53,0.15)"
                           value={value}
                           onChangeText={set}
                           keyboardType="decimal-pad"
                         />
-                        <Text style={{ color: '#444', fontSize: 14, fontWeight: '600' }}>kg</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>kg</Text>
                       </View>
                     </View>
                   ))}
                 </View>
                 <Pressable
                   onPress={next}
-                  style={{ backgroundColor: BRAND, borderRadius: 16, height: 56, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}
+                  style={{
+                    backgroundColor: 'rgba(200,241,53,0.4)',
+                    borderWidth: 1,
+                    borderColor: CTA_BORDER,
+                    borderRadius: 40,
+                    height: 60,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 12,
+                  }}
                 >
-                  <Text style={{ color: '#000', fontWeight: '900', fontSize: 16 }}>Enregistrer →</Text>
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Enregistrer →</Text>
                 </Pressable>
                 <Pressable onPress={next} style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: '#333', fontSize: 13 }}>Passer cette étape</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>Passer cette étape</Text>
                 </Pressable>
               </ScrollView>
             </KeyboardAvoidingView>
@@ -783,32 +909,44 @@ export default function OnboardScreen() {
         }
 
         return (
-          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12 }}>
+            <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+            <Text style={{
+              color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+              letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+            }}>
               Connais-tu tes{'\n'}charges ?
             </Text>
-            <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
               DC, Squat, Soulevé de terre — même approximativement. Ça calibre ton programme dès le premier jour.
             </Text>
             <View style={{ gap: 12 }}>
               <Pressable
                 onPress={() => setHasCharges(true)}
-                style={{ flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 20, borderWidth: 1, backgroundColor: '#1A1A1A', borderColor: '#2A2A2A' }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', padding: 20,
+                  borderRadius: 16, borderWidth: 1,
+                  backgroundColor: CARD_BG, borderColor: CARD_BORDER,
+                }}
               >
-                <Text style={{ fontSize: 28, marginRight: 16 }}>💪</Text>
+                <Text style={{ fontSize: 26, marginRight: 16 }}>💪</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Oui, je connais mes charges</Text>
-                  <Text style={{ color: '#555', fontSize: 13, marginTop: 3 }}>Programme calibré dès le départ</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Oui, je connais mes charges</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 3 }}>Programme calibré dès le départ</Text>
                 </View>
               </Pressable>
               <Pressable
                 onPress={() => next()}
-                style={{ flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 20, borderWidth: 1, backgroundColor: '#1A1A1A', borderColor: '#2A2A2A' }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', padding: 20,
+                  borderRadius: 16, borderWidth: 1,
+                  backgroundColor: CARD_BG, borderColor: CARD_BORDER,
+                }}
               >
-                <Text style={{ fontSize: 28, marginRight: 16 }}>🌱</Text>
+                <Text style={{ fontSize: 26, marginRight: 16 }}>🌱</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Non, on va les découvrir</Text>
-                  <Text style={{ color: '#555', fontSize: 13, marginTop: 3 }}>On commence léger et on progresse</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Non, on va les découvrir</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 3 }}>On commence léger et on progresse</Text>
                 </View>
               </Pressable>
             </View>
@@ -818,11 +956,15 @@ export default function OnboardScreen() {
 
       // ── Étape 8 — Fréquence ─────────────────────────────────
       case 7: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
             Combien de séances{'\n'}par semaine ?
           </Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 32 }}>
             On adapte le split à ta disponibilité.
           </Text>
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
@@ -831,18 +973,25 @@ export default function OnboardScreen() {
                 key={d}
                 onPress={() => { setDaysPerWeek(d); next(); }}
                 style={{
-                  flex: 1, height: 64, borderRadius: 16,
-                  backgroundColor: daysPerWeek === d ? BRAND : '#1A1A1A',
-                  borderWidth: 1, borderColor: daysPerWeek === d ? BRAND : '#2A2A2A',
+                  flex: 1, height: 72, borderRadius: 16,
+                  backgroundColor: daysPerWeek === d ? 'rgba(200,241,53,0.25)' : CARD_BG,
+                  borderWidth: 1, borderColor: CARD_BORDER,
                   alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <Text style={{ color: daysPerWeek === d ? '#000' : '#fff', fontWeight: '900', fontSize: 26 }}>{d}</Text>
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 28 }}>{d}</Text>
               </Pressable>
             ))}
           </View>
-          <View style={{ backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12 }}>
-            <Text style={{ color: '#555', fontSize: 13, lineHeight: 18 }}>
+          <View style={{
+            backgroundColor: CARD_BG,
+            borderWidth: 1,
+            borderColor: 'rgba(200,241,53,0.15)',
+            borderRadius: 14,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+          }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 13, lineHeight: 18 }}>
               {daysPerWeek
                 ? `💡 Avec ${daysPerWeek}j, le split suggéré est ${daysPerWeek <= 3 ? 'Full Body' : daysPerWeek === 4 ? 'Upper/Lower' : 'Push Pull Legs'}.`
                 : '💡 La majorité des athlètes progressent bien sur 4 séances / semaine.'}
@@ -853,11 +1002,15 @@ export default function OnboardScreen() {
 
       // ── Étape 9 — Structure ─────────────────────────────────
       case 8: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
             Quelle structure{'\n'}tu préfères ?
           </Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
             On s'adapte à n'importe quelle méthode.
           </Text>
           <View style={{ gap: 10 }}>
@@ -872,15 +1025,15 @@ export default function OnboardScreen() {
                 onPress={() => { setStructure(v); next(); }}
                 style={{
                   flexDirection: 'row', alignItems: 'center', padding: 18,
-                  borderRadius: 20, borderWidth: 1,
-                  backgroundColor: structure === v ? 'rgba(200,241,53,0.08)' : '#1A1A1A',
-                  borderColor: structure === v ? BRAND : '#2A2A2A',
+                  borderRadius: 16, borderWidth: 1,
+                  backgroundColor: structure === v ? 'rgba(200,241,53,0.12)' : CARD_BG,
+                  borderColor: CARD_BORDER,
                 }}
               >
-                <Text style={{ fontSize: 26, marginRight: 16 }}>{emoji}</Text>
+                <Text style={{ fontSize: 24, marginRight: 16 }}>{emoji}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: structure === v ? BRAND : '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
-                  <Text style={{ color: '#555', fontSize: 13, marginTop: 3 }}>{sub}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 3 }}>{sub}</Text>
                 </View>
                 {structure === v && <Text style={{ color: BRAND, fontWeight: '900' }}>✓</Text>}
               </Pressable>
@@ -891,11 +1044,15 @@ export default function OnboardScreen() {
 
       // ── Étape 10 — Équipement ───────────────────────────────
       case 9: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
             Où tu{'\n'}t'entraînes ?
           </Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
             Les exercices changent selon l'équipement disponible.
           </Text>
           <View style={{ gap: 10 }}>
@@ -910,15 +1067,15 @@ export default function OnboardScreen() {
                 onPress={() => { setEquipment(v); next(); }}
                 style={{
                   flexDirection: 'row', alignItems: 'center', padding: 18,
-                  borderRadius: 20, borderWidth: 1,
-                  backgroundColor: equipment === v ? 'rgba(200,241,53,0.08)' : '#1A1A1A',
-                  borderColor: equipment === v ? BRAND : '#2A2A2A',
+                  borderRadius: 16, borderWidth: 1,
+                  backgroundColor: equipment === v ? 'rgba(200,241,53,0.12)' : CARD_BG,
+                  borderColor: CARD_BORDER,
                 }}
               >
-                <Text style={{ fontSize: 28, marginRight: 16 }}>{emoji}</Text>
+                <Text style={{ fontSize: 26, marginRight: 16 }}>{emoji}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: equipment === v ? BRAND : '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
-                  <Text style={{ color: '#555', fontSize: 13, marginTop: 3 }}>{sub}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{label}</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 3 }}>{sub}</Text>
                 </View>
                 {equipment === v && <Text style={{ color: BRAND, fontWeight: '900' }}>✓</Text>}
               </Pressable>
@@ -929,20 +1086,30 @@ export default function OnboardScreen() {
 
       // ── Étape 12 — Upload photo ─────────────────────────────
       case 11: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, lineHeight: 36, marginBottom: 8 }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
+          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
+          <Text style={{
+            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
+            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
+          }}>
             Ton score{'\n'}physique.
           </Text>
-          <Text style={{ color: '#666', fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
             Ajoute une photo de ton physique actuel. Notre IA analyse ta morphologie et te révèle à quel athlète tu ressembles.
           </Text>
 
           <Pressable
             onPress={pickPhoto}
             style={{
-              backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A',
-              borderRadius: 20, height: 220, alignItems: 'center', justifyContent: 'center',
-              marginBottom: 16, overflow: 'hidden',
+              backgroundColor: CARD_BG,
+              borderWidth: 1,
+              borderColor: 'rgba(200,241,53,0.25)',
+              borderRadius: 20,
+              height: 220,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+              overflow: 'hidden',
             }}
           >
             {photoUri ? (
@@ -950,8 +1117,8 @@ export default function OnboardScreen() {
             ) : (
               <View style={{ alignItems: 'center', gap: 10 }}>
                 <Text style={{ fontSize: 52, opacity: 0.15 }}>🧍</Text>
-                <Text style={{ color: '#333', fontSize: 14 }}>Appuie pour ajouter une photo</Text>
-                <Text style={{ color: '#2A2A2A', fontSize: 12, textAlign: 'center', paddingHorizontal: 32, lineHeight: 17 }}>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Appuie pour ajouter une photo</Text>
+                <Text style={{ color: 'rgba(200,241,53,0.15)', fontSize: 12, textAlign: 'center', paddingHorizontal: 32, lineHeight: 17 }}>
                   Photo de dos ou de face,{'\n'}corps entier de préférence
                 </Text>
               </View>
@@ -960,7 +1127,7 @@ export default function OnboardScreen() {
 
           {photoUri && (
             <Pressable onPress={pickPhoto} style={{ marginBottom: 16, alignItems: 'center' }}>
-              <Text style={{ color: '#666', fontSize: 14 }}>Changer la photo</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Changer la photo</Text>
             </Pressable>
           )}
 
@@ -968,21 +1135,26 @@ export default function OnboardScreen() {
             onPress={photoUri ? () => analyzePhysique(photoUri) : next}
             disabled={analyzing}
             style={{
-              height: 56, borderRadius: 16,
-              backgroundColor: photoUri ? BRAND : '#1A1A1A',
-              borderWidth: photoUri ? 0 : 1, borderColor: '#2A2A2A',
-              alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-              flexDirection: 'row', gap: 10,
+              height: 60,
+              borderRadius: 40,
+              backgroundColor: photoUri ? 'rgba(200,241,53,0.4)' : 'rgba(200,241,53,0.06)',
+              borderWidth: 1,
+              borderColor: photoUri ? CTA_BORDER : 'rgba(200,241,53,0.12)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 12,
+              flexDirection: 'row',
+              gap: 10,
             }}
           >
-            {analyzing && <ActivityIndicator size="small" color="#000" />}
-            <Text style={{ fontWeight: '900', fontSize: 16, color: photoUri ? '#000' : '#555' }}>
+            {analyzing && <ActivityIndicator size="small" color={BRAND} />}
+            <Text style={{ fontWeight: '900', fontSize: 16, color: photoUri ? '#fff' : TEXT_MUTED }}>
               {analyzing ? 'Analyse en cours...' : photoUri ? 'Calculer mon score →' : 'Continuer sans photo'}
             </Text>
           </Pressable>
           {!analyzing && (
             <Pressable onPress={next} style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#333', fontSize: 13 }}>Passer cette étape</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>Passer cette étape</Text>
             </Pressable>
           )}
         </ScrollView>

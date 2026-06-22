@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Session } from '@/lib/types';
 import { SessionCard } from '@/components/SessionCard';
+import { GradientOrb } from '@/components/GradientOrb';
 
 export default function HistoryScreen() {
   const { user } = useAuth();
@@ -33,7 +34,8 @@ export default function HistoryScreen() {
   const totalPRs = sessions.reduce((acc, s) => acc + (s.sets ?? []).filter((set) => set.is_pr).length, 0);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0D06' }}>
+      <GradientOrb />
       <View className="px-5 pt-4 pb-2">
         <Text className="text-text-primary text-2xl font-black">Historique</Text>
       </View>

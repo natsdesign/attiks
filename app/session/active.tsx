@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable,
+  Alert, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { GradientOrb } from '@/components/GradientOrb';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
@@ -27,7 +27,6 @@ const SURFACE_RAISED = '#1E2914';
 const TEXT_SECONDARY = '#59644C';
 const TEXT_MUTED = 'rgba(89,100,76,0.5)';
 const CONTAINER_BG = 'rgba(22,29,15,0.2)';
-const { width: SCREEN_W } = Dimensions.get('window');
 
 const PR_NOTIF_LABELS: Record<PRType, string> = {
   absolu:  '🏆 PR ABSOLU',
@@ -374,21 +373,7 @@ export default function ActiveSessionScreen() {
 
   return (
     <SafeAreaView style={ss.root} edges={['top']}>
-      {/* ── Glow haut ────────────────────────────────────── */}
-      <Svg
-        width={SCREEN_W}
-        height={200}
-        style={ss.glow}
-        pointerEvents="none"
-      >
-        <Defs>
-          <RadialGradient id="g" cx="50%" cy="0%" rx="50%" ry="100%">
-            <Stop offset="0%" stopColor="#C8F135" stopOpacity="0.2" />
-            <Stop offset="100%" stopColor="#C8F135" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={SCREEN_W / 2} cy={0} r={166} fill="url(#g)" />
-      </Svg>
+      <GradientOrb />
 
       {/* ── Abandon + chrono (overlay) ───────────────────── */}
       <View style={ss.topOverlay} pointerEvents="box-none">
@@ -494,8 +479,6 @@ export default function ActiveSessionScreen() {
 const ss = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
 
-  /* glow */
-  glow: { position: 'absolute', top: 0, left: 0 },
 
   /* overlay abandon + chrono */
   topOverlay: {

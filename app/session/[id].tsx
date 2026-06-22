@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { Session, Set } from '@/lib/types';
+import { GradientOrb } from '@/components/GradientOrb';
 
 const PPL_LABELS: Record<string, string> = {
   push: 'Push', pull: 'Pull', legs: 'Legs', full: 'Full Body',
@@ -25,7 +26,8 @@ export default function SessionDetailScreen() {
 
   if (!session) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0D06', alignItems: 'center', justifyContent: 'center' }}>
+        <GradientOrb />
         <Text className="text-text-secondary">Chargement…</Text>
       </SafeAreaView>
     );
@@ -43,7 +45,8 @@ export default function SessionDetailScreen() {
   const totalVolume = sets.reduce((acc, s) => acc + s.reps * s.weight_kg, 0);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0D06' }} edges={['bottom']}>
+      <GradientOrb />
       <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Header */}
         <View className="pt-4 pb-6">

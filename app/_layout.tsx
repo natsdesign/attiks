@@ -72,7 +72,7 @@ export default function RootLayout() {
   }, [session, loading, segments, onboardingDone]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
+    <View style={{ flex: 1, backgroundColor: '#0A0D06' }}>
       <StatusBar style="light" />
       <BottomGlow />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
@@ -85,7 +85,7 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="session/[id]"
-          options={{ headerShown: true, headerTitle: 'Détail séance', headerStyle: { backgroundColor: '#111111' }, headerTintColor: '#fff' }}
+          options={{ headerShown: true, headerTitle: 'Détail séance', headerStyle: { backgroundColor: '#0A0D06' }, headerTintColor: '#fff' }}
         />
       </Stack>
     </View>

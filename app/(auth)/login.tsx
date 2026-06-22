@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { GradientOrb } from '@/components/GradientOrb';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -18,8 +19,10 @@ export default function LoginScreen() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#0A0D06' }}>
+      <GradientOrb />
     <KeyboardAvoidingView
-      className="flex-1 bg-surface"
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View className="flex-1 px-6 justify-center">
@@ -76,5 +79,6 @@ export default function LoginScreen() {
         </Link>
       </View>
     </KeyboardAvoidingView>
+    </View>
   );
 }
