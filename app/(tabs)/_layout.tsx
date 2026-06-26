@@ -1,62 +1,90 @@
+import { useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, IconName } from '@/components/Icon';
 
 const BRAND = '#C8F135';
-const INACTIVE = '#4A5A3A';
-const SURFACE = '#161D0F';
+const INACTIVE = '#555555';
 
-const TAB_ICONS: Record<string, IconName> = {
-  seance: 'barbell',
-  programs: 'list',
-  history: 'clock',
-  profile: 'user',
-};
-
-const TAB_LABELS: Record<string, string> = {
-  seance: 'Séance',
-  programs: 'Programme',
-  history: 'Historique',
-  profile: 'Profil',
-};
+const TAB_CONFIG: { name: string; label: string; icon: IconName }[] = [
+  { name: 'seance',   label: 'Séance',     icon: 'barbell' },
+  { name: 'programs', label: 'Programme',  icon: 'list'    },
+  { name: 'history',  label: 'Historique', icon: 'clock'   },
+  { name: 'profile',  label: 'Profil',     icon: 'user'    },
+];
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const visibleRoutes = state.routes.filter((r) => r.name !== 'index');
+  const activeIndex = visibleRoutes.findIndex((r) => r === state.routes[state.index]);
+
+  const iconScales = useRef(TAB_CONFIG.map(() => new Animated.Value(1))).current;
+
+  function handlePress(index: number, routeName: string) {
+    const isFocused = index === activeIndex;
+
+    Animated.sequence([
+      Animated.timing(iconScales[index], {
+        toValue: 1.18,
+        duration: 120,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(iconScales[index], {
+        toValue: 1,
+        tension: 200,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: visibleRoutes[index].key,
+      canPreventDefault: true,
+    });
+    if (!isFocused && !event.defaultPrevented) {
+      navigation.navigate(routeName);
+    }
+  }
 
   return (
-    <View style={[ss.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      <View style={ss.bar}>
-        {state.routes.map((route, index) => {
-          if (route.name === 'index') return null;
-          const isFocused = state.index === index;
-          const iconName = TAB_ICONS[route.name] as IconName;
-          const label = TAB_LABELS[route.name];
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          return (
-            <Pressable
-              key={route.key}
-              onPress={onPress}
-              style={[ss.tab, isFocused && ss.tabActive]}
-            >
-              <Icon name={iconName} size={20} color={isFocused ? '#0D1108' : INACTIVE} />
-              {isFocused && <Text style={ss.tabLabel}>{label}</Text>}
-            </Pressable>
-          );
-        })}
-      </View>
+    <View style={ss.wrapper} pointerEvents="box-none">
+      <LinearGradient
+        colors={['transparent', '#0D1108']}
+        pointerEvents="none"
+        style={ss.fadeGradient}
+      />
+      <BlurView
+        intensity={80}
+        tint="dark"
+        style={[ss.container, { paddingBottom: insets.bottom || 16 }]}
+      >
+        <View style={ss.overlay} />
+        <View style={ss.topBorder} />
+        <View style={ss.tabs}>
+          {TAB_CONFIG.map((tab, index) => {
+            const isActive = index === activeIndex;
+            const color = isActive ? BRAND : INACTIVE;
+            return (
+              <Pressable
+                key={tab.name}
+                style={ss.tab}
+                onPress={() => handlePress(index, tab.name)}
+              >
+                <Animated.View style={[ss.tabInner, { transform: [{ scale: iconScales[index] }] }]}>
+                  <Icon name={tab.icon} size={22} color={color} />
+                  <Text style={[ss.label, { color }]}>{tab.label}</Text>
+                </Animated.View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BlurView>
     </View>
   );
 }
@@ -65,48 +93,59 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: '#0D1108' },
+        animation: 'none',
+      }}
     >
-      <Tabs.Screen name="seance" options={{ title: 'Séance' }} />
+      <Tabs.Screen name="seance"   options={{ title: 'Séance' }} />
       <Tabs.Screen name="programs" options={{ title: 'Programme' }} />
-      <Tabs.Screen name="history" options={{ title: 'Historique' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
-      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="history"  options={{ title: 'Historique' }} />
+      <Tabs.Screen name="profile"  options={{ title: 'Profil' }} />
+      <Tabs.Screen name="index"    options={{ href: null }} />
     </Tabs>
   );
 }
 
 const ss = StyleSheet.create({
+  wrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  fadeGradient: {
+    height: 80,
+  },
   container: {
-    backgroundColor: 'transparent',
-    paddingTop: 10,
-    paddingHorizontal: 16,
+    overflow: 'hidden',
   },
-  bar: {
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(13, 17, 8, 0.55)',
+  },
+  topBorder: {
+    height: 0.5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  tabs: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: SURFACE,
-    borderRadius: 99,
-    padding: 5,
-  },
-  tab: {
-    height: 46,
-    minWidth: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 99,
+    paddingTop: 10,
     paddingHorizontal: 8,
   },
-  tabActive: {
-    backgroundColor: BRAND,
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 18,
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
   },
-  tabLabel: {
-    color: '#0D1108',
-    fontWeight: '700',
-    fontSize: 13,
+  tabInner: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
 });

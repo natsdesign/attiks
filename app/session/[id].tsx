@@ -26,7 +26,7 @@ export default function SessionDetailScreen() {
 
   if (!session) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0D06', alignItems: 'center', justifyContent: 'center' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0D1108', alignItems: 'center', justifyContent: 'center' }}>
         <GradientOrb />
         <Text className="text-text-secondary">Chargement…</Text>
       </SafeAreaView>
@@ -45,7 +45,7 @@ export default function SessionDetailScreen() {
   const totalVolume = sets.reduce((acc, s) => acc + s.reps * s.weight_kg, 0);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0D06' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0D1108' }} edges={['bottom']}>
       <GradientOrb />
       <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Header */}

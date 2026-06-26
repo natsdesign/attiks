@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +11,8 @@ import { GradientOrb } from '@/components/GradientOrb';
 export default function HistoryScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomPad = 65 + insets.bottom + 20;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +36,7 @@ export default function HistoryScreen() {
   const totalPRs = sessions.reduce((acc, s) => acc + (s.sets ?? []).filter((set) => set.is_pr).length, 0);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0D06' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0D1108' }}>
       <GradientOrb />
       <View className="px-5 pt-4 pb-2">
         <Text className="text-text-primary text-2xl font-black">Historique</Text>
@@ -55,7 +57,7 @@ export default function HistoryScreen() {
         </View>
       )}
 
-      <ScrollView className="flex-1 px-5">
+      <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: bottomPad }}>
         {loading ? (
           <Text className="text-text-muted text-sm text-center py-10">Chargement…</Text>
         ) : sessions.length === 0 ? (

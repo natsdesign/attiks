@@ -55,7 +55,8 @@
           "color": "#C8F135",
           "sounds": []
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {},
     "extra": {

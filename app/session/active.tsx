@@ -21,7 +21,7 @@ type LastSessionSets = Record<string, LastSetInfo[]>;
 type SuggestionCache = Record<string, ProgressionSuggestion[]>;
 
 const BRAND = '#C8F135';
-const BG = '#0A0D06';
+const BG = '#0D1108';
 const SURFACE = '#161D0F';
 const SURFACE_RAISED = '#1E2914';
 const TEXT_SECONDARY = '#59644C';

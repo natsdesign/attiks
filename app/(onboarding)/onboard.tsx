@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -31,7 +32,7 @@ type Equipment = 'salle_complete' | 'petite_salle' | 'domicile' | 'specifique';
 type Structure = 'ppl' | 'full_body' | 'haut_bas' | 'je_sais_pas';
 
 const BRAND = '#C8F135';
-const BG = '#0a0d06';
+const BG = '#0D1108';
 const CARD_BG = 'rgba(22,29,15,0.85)';
 const TEXT_MUTED = '#59644c';
 const CARD_BORDER = 'rgba(200,241,53,0.22)';
@@ -103,7 +104,8 @@ export default function OnboardScreen() {
   // ── Animation refs ───────────────────────────────────────────
   const mainProgress = useRef(new Animated.Value(0)).current;
   const welcomeFade = useRef(new Animated.Value(0)).current;
-  const welcomeScale = useRef(new Animated.Value(0.94)).current;
+  const welcomeScale = useRef(new Animated.Value(1.1)).current;
+  const welcomeSlide = useRef(new Animated.Value(20)).current;
   const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scoreTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [displayScore, setDisplayScore] = useState(0);
@@ -137,12 +139,34 @@ export default function OnboardScreen() {
   useEffect(() => {
     if (step !== 1) return;
     welcomeFade.setValue(0);
-    welcomeScale.setValue(0.94);
+    welcomeScale.setValue(1.1);
+    welcomeSlide.setValue(20);
     Animated.parallel([
-      Animated.timing(welcomeFade, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(welcomeScale, { toValue: 1, friction: 7, tension: 40, useNativeDriver: true }),
+      Animated.timing(welcomeScale, {
+        toValue: 1.0,
+        duration: 2000,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.parallel([
+          Animated.timing(welcomeFade, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(welcomeSlide, {
+            toValue: 0,
+            duration: 800,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
     ]).start();
-    welcomeTimerRef.current = setTimeout(() => setStep(2), 2600);
+    welcomeTimerRef.current = setTimeout(() => setStep(2), 3000);
     return () => { if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current); };
   }, [step]);
 
@@ -306,30 +330,89 @@ export default function OnboardScreen() {
     );
   }
 
-  // ── Écran 2 — Bienvenue (auto-advance 2.6s) ──────────────────
+  // ── Écran 2 — Bienvenue (auto-advance 3s) ───────────────────
   if (step === 1) {
     return (
-      <View style={{ flex: 1, backgroundColor: BG }}>
-        <GradientOrb />
-        <SafeAreaView style={{ flex: 1, paddingHorizontal: 28, justifyContent: 'center' }}>
-          <Animated.View style={{ opacity: welcomeFade, transform: [{ scale: welcomeScale }] }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 17, fontWeight: '400', marginBottom: 8 }}>
-              Bienvenue,
-            </Text>
-            <Text style={{
-              color: '#fff', fontWeight: '900', fontSize: 54, lineHeight: 52,
-              letterSpacing: -1.5, textTransform: 'uppercase',
-            }}>
-              {firstName}.
-            </Text>
-            <View style={{ height: 32 }} />
-            <LogoAttiks width={110} height={88} />
-            <View style={{ height: 20 }} />
-            <Text style={{ color: TEXT_MUTED, fontSize: 16, lineHeight: 26 }}>
-              Le carnet de muscu{'\n'}le plus intelligent.
-            </Text>
-          </Animated.View>
-        </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: '#0D1108' }}>
+        {/* Background image with slow zoom 110% → 100% */}
+        <Animated.Image
+          source={require('../../assets/attiks-gym.png')}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+            transform: [{ scale: welcomeScale }],
+          }}
+          resizeMode="cover"
+        />
+        {/* Black overlay 40% */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.42)',
+          }}
+        />
+        {/* Text block — fade + slide up — anchored at ~46% from top (Figma: y=429/932) */}
+        <Animated.View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: '46%',
+            paddingHorizontal: 20,
+            opacity: welcomeFade,
+            transform: [{ translateY: welcomeSlide }],
+          }}
+        >
+          <Text style={{
+            color: '#BDD02F',
+            fontSize: 18,
+            fontWeight: '600',
+            letterSpacing: 2.5,
+            textTransform: 'uppercase',
+            marginBottom: 2,
+            textShadowColor: 'rgba(189,208,47,0.35)',
+            textShadowRadius: 14,
+            textShadowOffset: { width: 0, height: 0 },
+          }}>
+            Bienvenue,
+          </Text>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={{
+              color: '#FFFFFF',
+              fontSize: 88,
+              fontWeight: '900',
+              letterSpacing: -2.5,
+              lineHeight: 84,
+              textTransform: 'uppercase',
+              textShadowColor: 'rgba(200,241,53,0.18)',
+              textShadowRadius: 24,
+              textShadowOffset: { width: 0, height: 0 },
+            }}
+          >
+            {firstName}
+          </Text>
+          <Text style={{
+            color: 'rgba(189,208,47,0.75)',
+            fontSize: 14,
+            fontWeight: '500',
+            letterSpacing: -0.4,
+            marginTop: 14,
+          }}>
+            Mesure tes performances et atteins l'excellence
+          </Text>
+        </Animated.View>
       </View>
     );
   }

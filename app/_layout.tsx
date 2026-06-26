@@ -1,6 +1,7 @@
 import '../global.css';
 import { useEffect, useState } from 'react';
 import { Dimensions, LogBox, View } from 'react-native';
+import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
 
 LogBox.ignoreLogs([
   'expo-notifications: Android Push notifications',
@@ -35,6 +36,7 @@ function BottomGlow() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({ Anton_400Regular });
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -72,7 +74,7 @@ export default function RootLayout() {
   }, [session, loading, segments, onboardingDone]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0D06' }}>
+    <View style={{ flex: 1, backgroundColor: '#0D1108' }}>
       <StatusBar style="light" />
       <BottomGlow />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
@@ -85,7 +87,7 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="session/[id]"
-          options={{ headerShown: true, headerTitle: 'Détail séance', headerStyle: { backgroundColor: '#0A0D06' }, headerTintColor: '#fff' }}
+          options={{ headerShown: true, headerTitle: 'Détail séance', headerStyle: { backgroundColor: '#0D1108' }, headerTintColor: '#fff' }}
         />
       </Stack>
     </View>

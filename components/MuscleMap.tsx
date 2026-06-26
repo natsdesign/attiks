@@ -87,7 +87,7 @@ export function MuscleMap({ muscleColors, compact = false }: MuscleMapProps) {
 
   return (
     <View>
-      <View style={{ flexDirection: 'row', gap: GAP, paddingHorizontal: compact ? 0 : 8, paddingTop: compact ? 0 : 8 }}>
+      <View style={{ flexDirection: 'row', gap: GAP, justifyContent: 'center', paddingTop: compact ? 0 : 8 }}>
         {/* Face */}
         <View style={{ alignItems: 'center' }}>
           <View style={{ width: w, height: h, overflow: 'hidden' }}>

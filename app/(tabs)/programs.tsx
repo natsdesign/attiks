@@ -3,17 +3,18 @@ import {
   Alert, Pressable, ScrollView, Text, TextInput, View,
   Modal, KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Program, PplBlock, SessionType, Exercise } from '@/lib/types';
 import { Icon } from '@/components/Icon';
 import { GradientOrb } from '@/components/GradientOrb';
+import { colors } from '@/lib/colors';
 
-const BRAND = '#C8F135';
-const BG = '#0A0D06';
-const SURFACE = '#161D0F';
-const SURFACE_RAISED = '#1E2914';
+const BRAND          = colors.brand;
+const BG             = colors.bg;
+const SURFACE        = colors.surface;
+const SURFACE_RAISED = colors.surfaceRaised;
 const TEXT_SECONDARY = '#59644C';
 const TEXT_MUTED = 'rgba(89,100,76,0.5)';
 
@@ -75,6 +76,8 @@ const PPL_COLORS: Record<PplBlock, string> = {
 
 export default function ProgramsScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const bottomPad = 65 + insets.bottom + 20;
   const [programs, setPrograms] = useState<Program[]>([]);
   const [lastUsed, setLastUsed] = useState<Record<string, string | null>>({});
   const [showCreate, setShowCreate] = useState(false);
@@ -193,7 +196,7 @@ export default function ProgramsScreen() {
         </Pressable>
       </View>
 
-      <ScrollView style={ss.list} contentContainerStyle={ss.listContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={ss.list} contentContainerStyle={[ss.listContent, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         {programs.length === 0 ? (
           <View style={ss.empty}>
             <Text style={{ fontSize: 40 }}>📋</Text>
@@ -261,7 +264,6 @@ export default function ProgramsScreen() {
             </Pressable>
           ))
         )}
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* ── MODAL CRÉATION / ÉDITION ─────────────────────── */}

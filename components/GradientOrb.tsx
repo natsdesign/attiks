@@ -1,31 +1,45 @@
 import { View } from 'react-native';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
-export const APP_BG = '#0A0D06';
+const SIZE = 400;
 
 export function GradientOrb() {
-  const layers = [
-    { size: 56,  opacity: 0.10 },
-    { size: 110, opacity: 0.065 },
-    { size: 166, opacity: 0.04 },
-    { size: 240, opacity: 0.025 },
-    { size: 340, opacity: 0.012 },
-  ];
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  const r = SIZE / 2;
+
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1 }}>
-      {layers.map(({ size, opacity }) => (
-        <View
-          key={size}
-          style={{
-            position: 'absolute',
-            top: -(size / 2),
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: `rgba(200,241,53,${opacity})`,
-            alignSelf: 'center',
-          }}
-        />
-      ))}
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: -cy,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 0,
+      }}
+    >
+      <Svg width={SIZE} height={SIZE}>
+        <Defs>
+          <RadialGradient
+            id="orb"
+            cx={cx}
+            cy={cy}
+            rx={r}
+            ry={r}
+            fx={cx}
+            fy={cy}
+            gradientUnits="userSpaceOnUse"
+          >
+            <Stop offset="0%" stopColor="#C8F135" stopOpacity="0.24" />
+            <Stop offset="30%" stopColor="#C8F135" stopOpacity="0.10" />
+            <Stop offset="60%" stopColor="#C8F135" stopOpacity="0.03" />
+            <Stop offset="100%" stopColor="#C8F135" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={cx} cy={cy} r={r} fill="url(#orb)" />
+      </Svg>
     </View>
   );
 }

@@ -19,7 +19,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0D06' }}>
+    <View style={{ flex: 1, backgroundColor: '#0D1108' }}>
       <GradientOrb />
     <KeyboardAvoidingView
       style={{ flex: 1 }}
