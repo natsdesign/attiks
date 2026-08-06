@@ -7,11 +7,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { Session } from '@/lib/types';
 import { SessionCard } from '@/components/SessionCard';
 import { GradientOrb } from '@/components/GradientOrb';
+import { useTheme } from '@/lib/theme';
 
 export default function HistoryScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   const bottomPad = 65 + insets.bottom + 20;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,41 +31,22 @@ export default function HistoryScreen() {
       });
   }, [user]);
 
-  const totalVolume = sessions.reduce(
-    (acc, s) => acc + (s.sets ?? []).reduce((a, set) => a + set.reps * set.weight_kg, 0),
-    0
-  );
-  const totalPRs = sessions.reduce((acc, s) => acc + (s.sets ?? []).filter((set) => set.is_pr).length, 0);
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0D1108' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <GradientOrb />
-      <View className="px-5 pt-4 pb-2">
-        <Text className="text-text-primary text-2xl font-black">Historique</Text>
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+        <Text style={{ color: theme.textPrimary, fontSize: 24, fontWeight: '900' }}>Historique</Text>
       </View>
 
-      {sessions.length > 0 && (
-        <View className="flex-row gap-3 px-5 pb-4">
-          {[
-            { label: 'Séances', value: String(sessions.length) },
-            { label: 'Volume total', value: `${Math.round(totalVolume / 1000)}t` },
-            { label: 'Records (PR)', value: String(totalPRs) },
-          ].map(({ label, value }) => (
-            <View key={label} className="flex-1 bg-surface-raised border border-surface-border rounded-2xl p-3 items-center">
-              <Text className="text-text-secondary text-xs mb-1">{label}</Text>
-              <Text className="text-brand font-black text-xl">{value}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: bottomPad }}>
+      <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 8 }} contentContainerStyle={{ paddingBottom: bottomPad }}>
         {loading ? (
-          <Text className="text-text-muted text-sm text-center py-10">Chargement…</Text>
+          <Text style={{ color: theme.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 40 }}>
+            Chargement…
+          </Text>
         ) : sessions.length === 0 ? (
-          <View className="items-center py-20">
-            <Text className="text-5xl mb-4">📊</Text>
-            <Text className="text-text-muted text-sm">Aucune séance pour l'instant.</Text>
+          <View style={{ alignItems: 'center', paddingVertical: 80 }}>
+            <Text style={{ fontSize: 48, marginBottom: 16 }}>📊</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 14 }}>Aucune séance pour l'instant.</Text>
           </View>
         ) : (
           sessions.map((s) => (

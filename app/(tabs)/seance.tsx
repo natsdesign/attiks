@@ -12,19 +12,9 @@ import { Program } from '@/lib/types';
 import { useRecoveryScore } from '@/hooks/useRecoveryScore';
 import { GradientOrb } from '@/components/GradientOrb';
 import { Icon } from '@/components/Icon';
+import { useTheme } from '@/lib/theme';
 
-// ── Tokens (valeurs exactes Figma 145:1175) ───────────────────────────────────
-
-const BG           = '#0D1108';
-const CARD_BG      = 'rgba(22,29,15,0.1)';
-const CARD_BORDER  = '#2A2A2A';
-const BRAND        = '#C8F135';
-const TEXT_WHITE   = '#FFFFFF';
-const TEXT_OLIVE   = '#59644C';
-const TEXT_MUTED   = 'rgba(89,100,76,0.5)';
-const TEXT_DIM     = 'rgba(255,255,255,0.7)';
-const PILL_BG      = 'rgba(200,241,53,0.1)';
-const ANTON        = 'Anton_400Regular';
+const ANTON = 'Anton_400Regular';
 
 // ── Gauge circulaire en pointillés ────────────────────────────────────────────
 
@@ -36,6 +26,7 @@ const CX           = GAUGE_SIZE / 2;
 const CY           = GAUGE_SIZE / 2;
 
 function RecoveryGauge({ score }: { score: number }) {
+  const { theme } = useTheme();
   const activeTicks = Math.round((score / 100) * TICK_COUNT);
   return (
     <Svg width={GAUGE_SIZE} height={GAUGE_SIZE}>
@@ -50,7 +41,7 @@ function RecoveryGauge({ score }: { score: number }) {
           <Line key={i}
             x1={x1.toFixed(2)} y1={y1.toFixed(2)}
             x2={x2.toFixed(2)} y2={y2.toFixed(2)}
-            stroke={active ? BRAND : '#2A2A2A'}
+            stroke={active ? theme.brand : theme.border}
             strokeWidth={2}
             strokeLinecap="round"
           />
@@ -62,11 +53,15 @@ function RecoveryGauge({ score }: { score: number }) {
 
 // ── Meta pill (durée / exercices) ─────────────────────────────────────────────
 
-function MetaPill({ icon, label }: { icon: 'clock' | 'barbell'; label: string }) {
+function MetaPill({ icon, label, theme }: { icon: 'clock' | 'barbell'; label: string; theme: ReturnType<typeof import('@/lib/theme').useTheme>['theme'] }) {
   return (
-    <View style={ss.pill}>
-      <Icon name={icon} size={14} color={TEXT_DIM} />
-      <Text style={ss.pillTxt}>{label}</Text>
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      backgroundColor: theme.brand + '1A', borderRadius: 8,
+      paddingHorizontal: 6, paddingVertical: 3,
+    }}>
+      <Icon name={icon} size={14} color={theme.textSecondary} />
+      <Text style={{ fontFamily: 'Inter', fontSize: 12, color: theme.textSecondary, letterSpacing: -0.36 }}>{label}</Text>
     </View>
   );
 }
@@ -92,6 +87,7 @@ export default function SeanceScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   const { score, message } = useRecoveryScore(user?.id);
 
   const [pseudo, setPseudo] = useState('');
@@ -130,6 +126,8 @@ export default function SeanceScreen() {
   const name = (pseudo || 'Athlète').toUpperCase();
   const exerciseCount = todayProgram?.exercises?.length ?? 0;
 
+  const ss = getStyles(theme);
+
   return (
     <SafeAreaView style={ss.root}>
       <GradientOrb />
@@ -148,16 +146,13 @@ export default function SeanceScreen() {
         {/* ── 2. RÉCUPÉRATION ─────────────────────────────────────── */}
         <Animated.View style={[ss.section, sect(1)]}>
           <View style={ss.card}>
-            {/* Colonne gauche */}
             <View style={ss.recovLeft}>
               <View>
                 <Text style={ss.cardLabel}>RÉCUPÉRATION</Text>
-                <Text style={ss.recovScore}>{score}%</Text>
+                <Text style={ss.recovScore} numberOfLines={1}>{score}%</Text>
               </View>
               <Text style={ss.recovMsg}>{message}</Text>
             </View>
-
-            {/* Gauge circulaire */}
             <View style={ss.gaugeWrap}>
               <RecoveryGauge score={score} />
             </View>
@@ -168,7 +163,6 @@ export default function SeanceScreen() {
         <Animated.View style={[ss.section, sect(2)]}>
           {todayProgram ? (
             <View style={[ss.card, ss.cardCol]}>
-              {/* Infos programme */}
               <View style={ss.progInfo}>
                 <View>
                   <Text style={ss.cardLabel}>PROGRAMME DU JOUR</Text>
@@ -178,15 +172,13 @@ export default function SeanceScreen() {
                 </View>
                 <View style={ss.pills}>
                   {exerciseCount > 0 && (
-                    <MetaPill icon="clock" label={formatDuration(exerciseCount)} />
+                    <MetaPill icon="clock" label={formatDuration(exerciseCount)} theme={theme} />
                   )}
                   {exerciseCount > 0 && (
-                    <MetaPill icon="barbell" label={String(exerciseCount)} />
+                    <MetaPill icon="barbell" label={String(exerciseCount)} theme={theme} />
                   )}
                 </View>
               </View>
-
-              {/* CTA principal */}
               <Pressable
                 style={ss.ctaBtn}
                 onPress={() =>
@@ -200,20 +192,19 @@ export default function SeanceScreen() {
               </Pressable>
             </View>
           ) : (
-            // Pas de programme → card vide
             <Pressable
               style={[ss.card, ss.cardCol, { gap: 20 }]}
               onPress={() => router.push('/(tabs)/programs')}
             >
               <View style={ss.progInfo}>
                 <Text style={ss.cardLabel}>PROGRAMME DU JOUR</Text>
-                <Text style={[ss.progName, { color: TEXT_MUTED }]}>AUCUN</Text>
+                <Text style={[ss.progName, { color: theme.textMuted }]}>AUCUN</Text>
               </View>
               <Pressable
-                style={[ss.ctaBtn, ss.ctaBtnOutline]}
+                style={[ss.ctaBtn, { backgroundColor: theme.brand, borderWidth: 0, borderRadius: 12, height: 52 }]}
                 onPress={() => router.push('/(tabs)/programs')}
               >
-                <Text style={[ss.ctaTxt, { color: '#0D1108' }]}>Créer mon programme →</Text>
+                <Text style={[ss.ctaTxt, { color: theme.bg }]}>Créer mon programme →</Text>
               </Pressable>
             </Pressable>
           )}
@@ -221,8 +212,9 @@ export default function SeanceScreen() {
 
         {/* ── 4. SÉANCE LIBRE ─────────────────────────────────────── */}
         <Animated.View style={[ss.freeLink, sect(3)]}>
-          <Pressable onPress={() => router.push('/session/active')}>
-            <Text style={ss.freeTxt}>ou démarrer une séance libre</Text>
+          <Pressable style={ss.freeBtn} onPress={() => router.push('/session/active')}>
+            <Text style={ss.freeTxt}>Séance libre</Text>
+            <Icon name="caretRight" size={12} color={theme.textSecondary} />
           </Pressable>
         </Animated.View>
 
@@ -231,146 +223,140 @@ export default function SeanceScreen() {
   );
 }
 
-// ── Styles (valeurs pixel-perfect Figma) ──────────────────────────────────────
+// ── Styles ──────────────────────────────────────────────────────────────────
 
-const ss = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 20, paddingTop: 10 },
+function getStyles(theme: ReturnType<typeof import('@/lib/theme').useTheme>['theme']) {
+  return StyleSheet.create({
+    root:   { flex: 1, backgroundColor: theme.bg },
+    scroll: { paddingHorizontal: 20, paddingTop: 10 },
 
-  // Header (Frame 33 — y:60)
-  header: { marginTop: 50 },
-  name: {
-    fontFamily: ANTON,
-    fontSize: 70,
-    color: TEXT_WHITE,
-    letterSpacing: -1.4,
-    lineHeight: 86,
-  },
-  date: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: TEXT_OLIVE,
-    letterSpacing: -0.42,
-    marginTop: 2,
-  },
+    header: { marginTop: 50 },
+    name: {
+      fontFamily: ANTON,
+      fontSize: 70,
+      color: theme.textPrimary,
+      letterSpacing: -1.4,
+      lineHeight: 86,
+    },
+    date: {
+      fontFamily: 'Inter',
+      fontSize: 14,
+      color: theme.textSecondary,
+      letterSpacing: -0.42,
+      marginTop: -8,
+    },
 
-  // Sections gap: 16px
-  section: { marginTop: 16 },
+    section: { marginTop: 16 },
 
-  // Card de base (Frame 31 / Frame 56)
-  card: {
-    backgroundColor: CARD_BG,
-    borderWidth: 0.5,
-    borderColor: '#2A2A2A',
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: 'row',
-    gap: 6,
-    overflow: 'hidden',
-  },
-  cardCol: { flexDirection: 'column', gap: 30 },
+    card: {
+      backgroundColor: theme.cardBg,
+      borderWidth: 0.5,
+      borderColor: theme.border,
+      borderRadius: 16,
+      padding: 14,
+      flexDirection: 'row',
+      gap: 6,
+      overflow: 'hidden',
+    },
+    cardCol: { flexDirection: 'column', gap: 30 },
 
-  // Label section interne (12px SemiBold muted)
-  cardLabel: {
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    fontSize: 12,
-    color: TEXT_MUTED,
-    letterSpacing: -0.36,
-    marginBottom: 0,
-  },
+    cardLabel: {
+      fontFamily: 'Inter',
+      fontWeight: '600',
+      fontSize: 12,
+      color: theme.textMuted,
+      letterSpacing: -0.36,
+      marginBottom: 0,
+    },
 
-  // Récupération — colonne gauche 197px
-  recovLeft: {
-    width: 197,
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  recovScore: {
-    fontFamily: ANTON,
-    fontSize: 50,
-    color: BRAND,
-    letterSpacing: -1.5,
-    lineHeight: 66,
-    width: 100,
-  },
-  recovMsg: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    color: TEXT_DIM,
-    letterSpacing: -0.36,
-    lineHeight: 17,
-    flex: 1,
-  },
-  gaugeWrap: { alignSelf: 'center' },
+    recovLeft: {
+      width: 197,
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    recovScore: {
+      fontFamily: ANTON,
+      fontSize: 50,
+      color: theme.brand,
+      letterSpacing: -1.5,
+      lineHeight: 65,
+    },
+    recovMsg: {
+      fontFamily: 'Inter',
+      fontSize: 12,
+      color: theme.textSecondary,
+      letterSpacing: -0.36,
+      lineHeight: 17,
+      flex: 1,
+    },
+    gaugeWrap: { alignSelf: 'center' },
 
-  // Programme du jour
-  progInfo: { gap: 4 },
-  progName: {
-    fontFamily: ANTON,
-    fontSize: 50,
-    color: BRAND,
-    letterSpacing: -1.5,
-    lineHeight: 65,
-  },
+    progInfo: { gap: 4 },
+    progName: {
+      fontFamily: ANTON,
+      fontSize: 50,
+      color: theme.brand,
+      letterSpacing: -1.5,
+      lineHeight: 65,
+    },
 
-  // Pills durée / exercices
-  pills: { flexDirection: 'row', gap: 4, marginTop: 0 },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: PILL_BG,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  pillTxt: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    color: TEXT_DIM,
-    letterSpacing: -0.36,
-  },
+    pills: { flexDirection: 'row', gap: 4, marginTop: 0 },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: theme.brand + '1A',
+      borderRadius: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+    },
+    pillTxt: {
+      fontFamily: 'Inter',
+      fontSize: 12,
+      color: theme.textSecondary,
+      letterSpacing: -0.36,
+    },
 
-  // CTA bouton solide #C8F135
-  ctaBtn: {
-    backgroundColor: BRAND,
-    borderWidth: 1,
-    borderColor: BRAND,
-    borderRadius: 40,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Glow shadow (5 couches Figma)
-    shadowColor: BRAND,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5.5,
-    elevation: 4,
-  },
-  ctaBtnOutline: {
-    backgroundColor: '#C8F135',
-    borderWidth: 0,
-    borderRadius: 12,
-    height: 52,
-  },
-  ctaTxt: {
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    fontSize: 16,
-    color: BG,
-    letterSpacing: -0.64,
-  },
+    ctaBtn: {
+      backgroundColor: theme.brand,
+      borderWidth: 1,
+      borderColor: theme.brand,
+      borderRadius: 40,
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: theme.brand,
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.04,
+      shadowRadius: 5.5,
+      elevation: 4,
+    },
+    ctaTxt: {
+      fontFamily: 'Inter',
+      fontWeight: '700',
+      fontSize: 16,
+      color: theme.bg,
+      letterSpacing: -0.64,
+    },
 
-  // "ou démarrer une séance libre"
-  freeLink: { marginTop: 16, alignItems: 'center' },
-  freeTxt: {
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    fontSize: 14,
-    color: TEXT_MUTED,
-    letterSpacing: -0.42,
-    textAlign: 'center',
-  },
-});
+    freeLink: { marginTop: 16, alignItems: 'center' },
+    freeBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 18,
+      paddingVertical: 11,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    freeTxt: {
+      fontFamily: 'Inter',
+      fontWeight: '600',
+      fontSize: 13,
+      color: theme.textSecondary,
+      letterSpacing: -0.3,
+    },
+  });
+}

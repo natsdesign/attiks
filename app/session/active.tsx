@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { GradientOrb } from '@/components/GradientOrb';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/lib/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase';
@@ -20,13 +21,6 @@ import type { ShareCardData } from '@/components/ShareCard';
 type LastSessionSets = Record<string, LastSetInfo[]>;
 type SuggestionCache = Record<string, ProgressionSuggestion[]>;
 
-const BRAND = '#C8F135';
-const BG = '#0D1108';
-const SURFACE = '#161D0F';
-const SURFACE_RAISED = '#1E2914';
-const TEXT_SECONDARY = '#59644C';
-const TEXT_MUTED = 'rgba(89,100,76,0.5)';
-const CONTAINER_BG = 'rgba(22,29,15,0.2)';
 
 const PR_NOTIF_LABELS: Record<PRType, string> = {
   absolu:  '🏆 PR ABSOLU',
@@ -69,6 +63,7 @@ async function sendPRNotification(exerciseName: string, types: PRType[]) {
 export default function ActiveSessionScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { theme } = useTheme();
   const { programId } = useLocalSearchParams<{ programId?: string }>();
 
   const [program, setProgram] = useState<Program | null>(null);
@@ -372,16 +367,16 @@ export default function ActiveSessionScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={ss.root} edges={['top']}>
+    <SafeAreaView style={[ss.root, { backgroundColor: theme.bg }]} edges={['top']}>
       <GradientOrb />
 
       {/* ── Abandon + chrono (overlay) ───────────────────── */}
       <View style={ss.topOverlay} pointerEvents="box-none">
-        <Pressable onPress={handleAbandon} style={ss.abandonBtn} hitSlop={12}>
-          <Text style={ss.abandonTxt}>✕</Text>
+        <Pressable onPress={handleAbandon} style={[ss.abandonBtn, { backgroundColor: theme.surface + 'B3' }]} hitSlop={12}>
+          <Text style={[ss.abandonTxt, { color: theme.textSecondary }]}>✕</Text>
         </Pressable>
-        <View style={ss.chronoPill}>
-          <Text style={ss.chronoTxt}>
+        <View style={[ss.chronoPill, { backgroundColor: theme.surface + 'B3' }]}>
+          <Text style={[ss.chronoTxt, { color: theme.brand }]}>
             {mins}:{secs.toString().padStart(2, '0')}
           </Text>
         </View>
@@ -393,7 +388,7 @@ export default function ActiveSessionScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <View style={ss.container}>
+        <View style={[ss.container, { backgroundColor: theme.cardBg }]}>
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={ss.scroll}
@@ -405,11 +400,11 @@ export default function ActiveSessionScreen() {
 
             {/* Exercices */}
             {exercises.map((ex, exIdx) => (
-              <View key={exIdx} style={ss.exCard}>
+              <View key={exIdx} style={[ss.exCard, { backgroundColor: theme.surface, borderColor: theme.brand + '12' }]}>
                 <View style={ss.exHeader}>
-                  <Text style={ss.exName}>{ex.name}</Text>
+                  <Text style={[ss.exName, { color: theme.textPrimary }]}>{ex.name}</Text>
                   {ex.muscle_group ? (
-                    <Text style={ss.exMuscle}>{ex.muscle_group}</Text>
+                    <Text style={[ss.exMuscle, { color: theme.textMuted }]}>{ex.muscle_group}</Text>
                   ) : null}
                 </View>
                 {ex.sets.map((set, setIdx) => (
@@ -432,18 +427,18 @@ export default function ActiveSessionScreen() {
 
             {/* Ajouter un exercice */}
             <View style={ss.addExWrap}>
-              <Text style={ss.addExLabel}>AJOUTER UN EXERCICE</Text>
+              <Text style={[ss.addExLabel, { color: theme.textMuted }]}>AJOUTER UN EXERCICE</Text>
               <View style={ss.addExRow}>
                 <TextInput
-                  style={ss.addExInput}
+                  style={[ss.addExInput, { backgroundColor: theme.cardBg, borderColor: theme.brand, color: theme.textSecondary }]}
                   placeholder="Nom de l'exercice"
-                  placeholderTextColor={TEXT_SECONDARY}
+                  placeholderTextColor={theme.textSecondary}
                   value={newExName}
                   onChangeText={setNewExName}
                   onSubmitEditing={addExercise}
                 />
-                <Pressable onPress={addExercise} style={ss.addExBtn}>
-                  <Text style={ss.addExBtnTxt}>+</Text>
+                <Pressable onPress={addExercise} style={[ss.addExBtn, { backgroundColor: theme.surface, borderColor: theme.brand }]}>
+                  <Text style={[ss.addExBtnTxt, { color: theme.brand }]}>+</Text>
                 </Pressable>
               </View>
             </View>
@@ -455,7 +450,8 @@ export default function ActiveSessionScreen() {
 
       {/* ── Bouton Terminer (Figma style) ────────────────── */}
       <View style={[ss.terminWrap, { bottom: insets.bottom + 14 }]}>
-        <Pressable onPress={handleFinish} disabled={saving} style={ss.terminBtn}>
+        <Pressable onPress={handleFinish} disabled={saving}
+          style={[ss.terminBtn, { backgroundColor: theme.brand + '66', borderColor: theme.brand, shadowColor: theme.brand }]}>
           <Text style={ss.terminTxt}>{saving ? '...' : 'Terminer la séance'}</Text>
         </Pressable>
       </View>
@@ -477,136 +473,35 @@ export default function ActiveSessionScreen() {
 }
 
 const ss = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-
-
-  /* overlay abandon + chrono */
+  root: { flex: 1 },
   topOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
-    zIndex: 10,
+    position: 'absolute', top: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10, zIndex: 10,
   },
-  abandonBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(22,29,15,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  abandonTxt: { color: TEXT_SECONDARY, fontSize: 14, fontWeight: '600' },
-  chronoPill: {
-    backgroundColor: 'rgba(22,29,15,0.7)',
-    borderRadius: 99,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  chronoTxt: {
-    color: BRAND,
-    fontWeight: '700',
-    fontSize: 14,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-  },
-
-  /* container principal */
+  abandonBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  abandonTxt: { fontSize: 14, fontWeight: '600' },
+  chronoPill: { borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 },
+  chronoTxt: { fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'], letterSpacing: -0.3 },
   container: {
-    flex: 1,
-    backgroundColor: CONTAINER_BG,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    overflow: 'hidden',
-    marginTop: 54,  // espace pour l'overlay abandon/chrono
+    flex: 1, borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    overflow: 'hidden', marginTop: 54,
   },
-  scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    gap: 26,
-    alignItems: 'center',
-  },
-
-  /* exercise card */
-  exCard: {
-    backgroundColor: 'rgba(22,29,15,0.6)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(200,241,53,0.07)',
-    padding: 16,
-    width: '100%',
-  },
-  exHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  exName: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
-  exMuscle: { color: TEXT_MUTED, fontSize: 12 },
-
-  /* ajouter un exercice */
+  scroll: { paddingHorizontal: 20, paddingTop: 20, gap: 26, alignItems: 'center' },
+  exCard: { borderRadius: 20, borderWidth: 1, padding: 16, width: '100%' },
+  exHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  exName: { fontWeight: '800', fontSize: 18 },
+  exMuscle: { fontSize: 12 },
   addExWrap: { width: '100%', gap: 8 },
-  addExLabel: {
-    color: TEXT_MUTED,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: -0.42,
-  },
+  addExLabel: { fontSize: 14, fontWeight: '600', letterSpacing: -0.42 },
   addExRow: { flexDirection: 'row', gap: 8 },
-  addExInput: {
-    flex: 1,
-    backgroundColor: CONTAINER_BG,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BRAND,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-  },
-  addExBtn: {
-    width: 52,
-    height: 52,
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BRAND,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addExBtnTxt: { color: BRAND, fontWeight: '800', fontSize: 22, lineHeight: 24 },
-
-  /* bouton terminer (Figma style) */
-  terminWrap: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-  },
+  addExInput: { flex: 1, borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 14 },
+  addExBtn: { width: 52, height: 52, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  addExBtnTxt: { fontWeight: '800', fontSize: 22, lineHeight: 24 },
+  terminWrap: { position: 'absolute', left: 20, right: 20 },
   terminBtn: {
-    borderRadius: 40,
-    backgroundColor: 'rgba(200,241,53,0.4)',
-    borderWidth: 1,
-    borderColor: BRAND,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    shadowColor: BRAND,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5.5,
-    elevation: 8,
+    borderRadius: 40, borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.04, shadowRadius: 5.5, elevation: 8,
   },
-  terminTxt: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 16,
-    letterSpacing: -0.64,
-  },
+  terminTxt: { color: '#FFFFFF', fontWeight: '700', fontSize: 16, letterSpacing: -0.64 },
 });

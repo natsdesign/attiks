@@ -3,6 +3,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,15 +19,15 @@ import { ShareCard, ShareCardData } from './ShareCard';
 const BRAND = '#C8F135';
 const BG = '#0D1108';
 const SURFACE = '#161D0F';
-const TEXT_MUTED = '#4A5A3A';
+const TEXT_MUTED = '#8A9A7A';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 40;
 
 const VARIANTS: { id: 1 | 2 | 3; label: string; sub: string }[] = [
-  { id: 1, label: 'Story', sub: 'Avec photo' },
-  { id: 2, label: 'Carte', sub: 'Sans fond' },
-  { id: 3, label: 'Feed', sub: 'Carré' },
+  { id: 1, label: 'Story', sub: 'Photo · 9:16' },
+  { id: 2, label: 'Dark', sub: 'Fond · 9:16' },
+  { id: 3, label: 'Feed', sub: 'Carré · 1:1' },
 ];
 
 interface Props {
@@ -117,6 +118,7 @@ export function ShareCardModal({ data, onDismiss }: Props) {
   const cardHeight = variant === 3 ? CARD_W : Math.round(CARD_W * 16 / 9);
 
   return (
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onDismiss}>
     <SafeAreaView style={ss.root}>
       {/* ── HEADER ─────────────────────────────────── */}
       <View style={ss.header}>
@@ -203,6 +205,7 @@ export function ShareCardModal({ data, onDismiss }: Props) {
         </Pressable>
       </View>
     </SafeAreaView>
+    </Modal>
   );
 }
 

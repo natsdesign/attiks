@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getMusclesForExercise } from '@/lib/muscleMapping';
 
-export const MUSCLE_RED = '#FF3B30';    // 0–24h  : fatigue maximale
-export const MUSCLE_ORANGE = '#FF9500'; // 24–36h : en récupération
-const RECOVERY_HOURS = 36;
+export const MUSCLE_RED    = '#FF4444';  // < 24h   : fatigue maximale
+export const MUSCLE_ORANGE = '#FF8C00';  // 24–48h  : en récupération
+export const MUSCLE_YELLOW = '#FFD700';  // 48–72h  : presque prêt
+export const MUSCLE_GREEN  = '#C8F135';  // 72h–7j  : récupéré, prêt
 
-export type MuscleColors = Record<string, typeof MUSCLE_RED | typeof MUSCLE_ORANGE>;
+const RECOVERY_WINDOW_HOURS = 168; // 7 jours
+
+export type MuscleColors = Record<string, string>;
 
 export function useMuscleRecovery(userId: string | undefined): MuscleColors {
   const [colors, setColors] = useState<MuscleColors>({});
@@ -15,7 +18,7 @@ export function useMuscleRecovery(userId: string | undefined): MuscleColors {
     if (!userId) return;
 
     const since = new Date();
-    since.setHours(since.getHours() - RECOVERY_HOURS);
+    since.setHours(since.getHours() - RECOVERY_WINDOW_HOURS);
 
     supabase
       .from('sets')
@@ -25,7 +28,6 @@ export function useMuscleRecovery(userId: string | undefined): MuscleColors {
       .then(({ data }) => {
         if (!data || data.length === 0) return;
 
-        // Pour chaque muscle, on garde la date de la séance la plus récente
         const lastWorked: Record<string, Date> = {};
 
         for (const row of data as any[]) {
@@ -47,8 +49,12 @@ export function useMuscleRecovery(userId: string | undefined): MuscleColors {
 
           if (hoursAgo < 24) {
             result[muscle] = MUSCLE_RED;
-          } else if (hoursAgo < RECOVERY_HOURS) {
+          } else if (hoursAgo < 48) {
             result[muscle] = MUSCLE_ORANGE;
+          } else if (hoursAgo < 72) {
+            result[muscle] = MUSCLE_YELLOW;
+          } else {
+            result[muscle] = MUSCLE_GREEN;
           }
         }
 

@@ -1,11 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Session } from '@/lib/types';
-
-const BRAND = '#C8F135';
-const SURFACE = '#161D0F';
-const SURFACE_RAISED = '#1E2914';
-const TEXT_SECONDARY = '#59644C';
-const TEXT_MUTED = 'rgba(89,100,76,0.5)';
+import { useTheme } from '@/lib/theme';
 
 interface SessionCardProps {
   session: Session;
@@ -30,6 +25,8 @@ function formatVolume(kg: number): string {
 }
 
 export function SessionCard({ session, onPress }: SessionCardProps) {
+  const { theme } = useTheme();
+
   const date = new Date(session.date);
   const dateStr = date.toLocaleDateString('fr-FR', {
     weekday: 'short', day: 'numeric', month: 'short',
@@ -40,23 +37,23 @@ export function SessionCard({ session, onPress }: SessionCardProps) {
   const pr = session.sets?.find((s) => s.is_pr);
 
   return (
-    <Pressable onPress={onPress} style={ss.card}>
+    <Pressable onPress={onPress} style={[ss.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
       {/* top row */}
       <View style={ss.topRow}>
         <View style={{ flex: 1 }}>
-          <Text style={ss.title}>
+          <Text style={[ss.title, { color: theme.textPrimary }]}>
             {session.ppl_block ? PPL_LABELS[session.ppl_block] : 'Séance libre'}
           </Text>
-          <Text style={ss.subtitle}>{dateStr}</Text>
+          <Text style={[ss.subtitle, { color: theme.textSecondary }]}>{dateStr}</Text>
         </View>
         {pr && (
-          <View style={ss.prBadge}>
-            <Text style={ss.prBadgeTxt}>PR</Text>
+          <View style={[ss.prBadge, { backgroundColor: theme.brand }]}>
+            <Text style={[ss.prBadgeTxt, { color: theme.bg }]}>PR</Text>
           </View>
         )}
         {session.type && !pr && (
-          <View style={ss.typeBadge}>
-            <Text style={ss.typeBadgeTxt}>{TYPE_LABELS[session.type]}</Text>
+          <View style={[ss.typeBadge, { backgroundColor: theme.surfaceRaised }]}>
+            <Text style={[ss.typeBadgeTxt, { color: theme.textMuted }]}>{TYPE_LABELS[session.type]}</Text>
           </View>
         )}
       </View>
@@ -65,27 +62,27 @@ export function SessionCard({ session, onPress }: SessionCardProps) {
       <View style={ss.statsRow}>
         {totalVolume > 0 && (
           <View style={ss.stat}>
-            <Text style={ss.statLabel}>Volume</Text>
-            <Text style={ss.statValue}>{formatVolume(totalVolume)}</Text>
+            <Text style={[ss.statLabel, { color: theme.textMuted }]}>Volume</Text>
+            <Text style={[ss.statValue, { color: theme.textPrimary }]}>{formatVolume(totalVolume)}</Text>
           </View>
         )}
         {session.duration_minutes != null && (
           <View style={ss.stat}>
-            <Text style={ss.statLabel}>Durée</Text>
-            <Text style={ss.statValue}>{session.duration_minutes}min</Text>
+            <Text style={[ss.statLabel, { color: theme.textMuted }]}>Durée</Text>
+            <Text style={[ss.statValue, { color: theme.textPrimary }]}>{session.duration_minutes}min</Text>
           </View>
         )}
         <View style={ss.stat}>
-          <Text style={ss.statLabel}>Séries</Text>
-          <Text style={ss.statValue}>{totalSets}</Text>
+          <Text style={[ss.statLabel, { color: theme.textMuted }]}>Séries</Text>
+          <Text style={[ss.statValue, { color: theme.textPrimary }]}>{totalSets}</Text>
         </View>
       </View>
 
       {/* PR detail */}
       {pr && (
         <View style={ss.prRow}>
-          <Text style={ss.prRowLabel}>PR · </Text>
-          <Text style={ss.prRowValue} numberOfLines={1}>
+          <Text style={[ss.prRowLabel, { color: theme.brand }]}>PR · </Text>
+          <Text style={[ss.prRowValue, { color: theme.textSecondary }]} numberOfLines={1}>
             {pr.exercise_name} — {pr.weight_kg}kg × {pr.reps}
           </Text>
         </View>
@@ -96,65 +93,23 @@ export function SessionCard({ session, onPress }: SessionCardProps) {
 
 const ss = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(22,29,15,0.8)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(200,241,53,0.12)',
     padding: 14,
     marginBottom: 10,
   },
-
   topRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
-
-  title: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.72,
-    textTransform: 'uppercase',
-  },
-  subtitle: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-    letterSpacing: -0.42,
-    marginTop: 2,
-  },
-
-  prBadge: {
-    backgroundColor: BRAND,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-  },
-  prBadgeTxt: { color: '#0D1108', fontSize: 11, fontWeight: '800' },
-
-  typeBadge: {
-    backgroundColor: SURFACE_RAISED,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-  },
-  typeBadgeTxt: { color: TEXT_MUTED, fontSize: 11, fontWeight: '600' },
-
+  title: { fontSize: 22, fontWeight: '900', letterSpacing: -0.72, textTransform: 'uppercase' },
+  subtitle: { fontSize: 14, letterSpacing: -0.42, marginTop: 2 },
+  prBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
+  prBadgeTxt: { fontSize: 11, fontWeight: '800' },
+  typeBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
+  typeBadgeTxt: { fontSize: 11, fontWeight: '600' },
   statsRow: { flexDirection: 'row', gap: 18 },
   stat: { gap: 4 },
-  statLabel: {
-    color: TEXT_MUTED,
-    fontSize: 14,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: -0.42,
-  },
-  statValue: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.42,
-  },
-
+  statLabel: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: -0.42 },
+  statValue: { fontSize: 14, fontWeight: '700', letterSpacing: -0.42 },
   prRow: { flexDirection: 'row', marginTop: 12, alignItems: 'center' },
-  prRowLabel: { color: BRAND, fontSize: 11, fontWeight: '700' },
-  prRowValue: { color: TEXT_SECONDARY, fontSize: 12, flex: 1 },
+  prRowLabel: { fontSize: 11, fontWeight: '700' },
+  prRowValue: { fontSize: 12, flex: 1 },
 });

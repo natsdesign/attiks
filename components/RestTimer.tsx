@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Vibration } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-
-const BRAND = '#C8F135';
+import { useTheme } from '@/lib/theme';
 const SIZE = 220;
 const STROKE = 14;
 const R = (SIZE - STROKE) / 2;
@@ -20,6 +19,7 @@ interface RestTimerProps {
 }
 
 export function RestTimer({ defaultSeconds = 90 }: RestTimerProps) {
+  const { theme } = useTheme();
   const [active, setActive] = useState(false);
   const [remaining, setRemaining] = useState(defaultSeconds);
   const [total, setTotal] = useState(defaultSeconds);
@@ -61,52 +61,32 @@ export function RestTimer({ defaultSeconds = 90 }: RestTimerProps) {
 
   return (
     <View style={ss.root}>
-      {/* ── REPOS + Passer ─────────────────────────── */}
       <View style={ss.topRow}>
-        <Text style={ss.label}>REPOS</Text>
+        <Text style={[ss.label, { color: theme.brand }]}>REPOS</Text>
         {active && (
           <Pressable onPress={stop} hitSlop={12}>
-            <Text style={ss.passerTxt}>Passer</Text>
+            <Text style={[ss.passerTxt, { color: theme.brand }]}>Passer</Text>
           </Pressable>
         )}
       </View>
 
-      {/* ── Anneau circulaire ──────────────────────── */}
       <View style={ss.circleWrap}>
         <Svg width={SIZE} height={SIZE}>
-          {/* Track */}
-          <Circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={R}
-            stroke="rgba(200,241,53,0.15)"
-            strokeWidth={STROKE}
-            fill="none"
-          />
-          {/* Arc de progression */}
-          <Circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={R}
-            stroke={BRAND}
-            strokeWidth={STROKE}
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-            fill="none"
-            rotation={-90}
-            origin={`${SIZE / 2}, ${SIZE / 2}`}
-          />
+          <Circle cx={SIZE / 2} cy={SIZE / 2} r={R}
+            stroke={theme.brand + '26'} strokeWidth={STROKE} fill="none" />
+          <Circle cx={SIZE / 2} cy={SIZE / 2} r={R}
+            stroke={theme.brand} strokeWidth={STROKE}
+            strokeDasharray={CIRCUMFERENCE} strokeDashoffset={dashOffset}
+            strokeLinecap="round" fill="none"
+            rotation={-90} origin={`${SIZE / 2}, ${SIZE / 2}`} />
         </Svg>
-        {/* Chrono centré */}
         <View style={ss.numWrap} pointerEvents="none">
-          <Text style={ss.num}>
+          <Text style={[ss.num, { color: theme.textPrimary }]}>
             {mins}:{secs.toString().padStart(2, '0')}
           </Text>
         </View>
       </View>
 
-      {/* ── Presets ────────────────────────────────── */}
       <View style={ss.presetsRow}>
         {PRESETS.map(({ label, seconds }) => {
           const selected = total === seconds;
@@ -114,9 +94,13 @@ export function RestTimer({ defaultSeconds = 90 }: RestTimerProps) {
             <Pressable
               key={seconds}
               onPress={() => start(seconds)}
-              style={[ss.presetBtn, selected ? ss.presetBtnOn : ss.presetBtnOff]}
+              style={[ss.presetBtn,
+                selected
+                  ? { backgroundColor: theme.brand + '59', borderColor: theme.brand }
+                  : { backgroundColor: theme.brand + '1A', borderColor: theme.brand + '4D' }
+              ]}
             >
-              <Text style={[ss.presetTxt, selected ? ss.presetTxtOn : ss.presetTxtOff]}>
+              <Text style={[ss.presetTxt, { color: selected ? theme.brand : theme.brand + 'B3' }]}>
                 {label}
               </Text>
             </Pressable>
@@ -128,81 +112,14 @@ export function RestTimer({ defaultSeconds = 90 }: RestTimerProps) {
 }
 
 const ss = StyleSheet.create({
-  root: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 26,
-  },
-
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  label: {
-    color: BRAND,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: -0.42,
-  },
-  passerTxt: {
-    color: BRAND,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: -0.42,
-  },
-
-  circleWrap: {
-    width: SIZE,
-    height: SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  numWrap: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: SIZE,
-    height: SIZE,
-  },
-  num: {
-    color: '#FFFFFF',
-    fontSize: 64,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -2,
-  },
-
-  presetsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  presetBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  presetBtnOn: {
-    backgroundColor: 'rgba(189,208,47,0.35)',
-    borderColor: BRAND,
-  },
-  presetBtnOff: {
-    backgroundColor: 'rgba(189,208,47,0.1)',
-    borderColor: 'rgba(200,241,53,0.3)',
-  },
-  presetTxt: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.48,
-  },
-  presetTxtOn: {
-    color: BRAND,
-  },
-  presetTxtOff: {
-    color: 'rgba(200,241,53,0.5)',
-  },
+  root: { width: '100%', alignItems: 'center', gap: 26 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  label: { fontSize: 14, fontWeight: '600', letterSpacing: -0.42 },
+  passerTxt: { fontSize: 14, fontWeight: '600', letterSpacing: -0.42 },
+  circleWrap: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
+  numWrap: { position: 'absolute', alignItems: 'center', justifyContent: 'center', width: SIZE, height: SIZE },
+  num: { fontSize: 64, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -2 },
+  presetsRow: { flexDirection: 'row', gap: 10 },
+  presetBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  presetTxt: { fontSize: 16, fontWeight: '600', letterSpacing: -0.48 },
 });

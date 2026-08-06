@@ -1,64 +1,62 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Animated, Dimensions, Easing, Modal,
+  ActivityIndicator, Alert, Animated, Dimensions, Easing, Linking, Modal,
   Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
+import { useTheme } from '@/lib/theme';
 import Svg, {
-  Circle, ClipPath, Defs, G, Line,
+  Circle, ClipPath, Defs, G,
   LinearGradient as SvgGradient,
-  Path, Rect, Stop, Text as SvgText,
+  Path, Rect, Stop, Line as SvgLine,
 } from 'react-native-svg';
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
+
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { GradientOrb } from '@/components/GradientOrb';
 import { MuscleMap } from '@/components/MuscleMap';
 import { useRecoveryScore } from '@/hooks/useRecoveryScore';
 import { getMusclesForExercise } from '@/lib/muscleMapping';
+import RevenueCatUI from 'react-native-purchases-ui';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+const PRIVACY_POLICY_URL = 'https://natsdesign.github.io/attiks/confidentialite.html';
 
-const BRAND = '#C8F135';
-const BG = '#0D1108';
-const SURFACE = '#161D0F';
-const TEXT_SEC = '#888888';
-const TEXT_MUTED = '#555555';
-const TEXT_DIM = '#444444';
-const ACCENT_DARK = '#2A3A1A';
 const { width: SW } = Dimensions.get('window');
+const SECTION_PAD = 16;
+const PANTIN_HEIGHT = Math.round((SW - 32) * 0.9 / 0.9963);
 
-const MUSCLE_GROUPS: Record<string, string> = {
-  pec: 'Pectoraux', 'pec-2': 'Pectoraux',
-  lats: 'Dos', trapezius: 'Dos', lumbar: 'Lombaires',
-  'trapezius-front': 'Épaules',
-  'delt-right': 'Épaules', 'delt-left': 'Épaules', delt: 'Épaules',
-  biceps: 'Biceps', 'biceps-right': 'Biceps',
-  triceps: 'Triceps',
-  quadriceps: 'Quadriceps',
-  harmstring: 'Ischio-jambiers',
-  gluteus: 'Fessiers', 'gluteus-front': 'Fessiers',
-  calves: 'Mollets', 'calves-front': 'Mollets',
-  abs: 'Abdominaux', oblique: 'Abdominaux',
-  adductor: 'Adducteurs', gracilis: 'Adducteurs',
-};
+const CHART_W     = SW - SECTION_PAD * 2;
+const CHART_H     = 170;
+const CHART_INNER = CHART_H - 24;
 
-const PUSH_MUSCLES = new Set(['Pectoraux', 'Épaules', 'Triceps']);
-const PULL_MUSCLES = new Set(['Dos', 'Biceps', 'Lombaires']);
-const LEGS_MUSCLES = new Set(['Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Adducteurs']);
+// Heatmap — petits carrés arrondis style contribution graph
+const DOT_SIZE = 9;
+const GRID_GAP = 3;
+const GRID_W   = SW - 32;
+const COLS     = Math.floor((GRID_W + GRID_GAP) / (DOT_SIZE + GRID_GAP));
+const ROWS     = 7;
+
+const DEMO_DATA = [
+  { label: '', oneRM: 90 }, { label: '', oneRM: 92 },
+  { label: '', oneRM: 95 }, { label: '', oneRM: 98 },
+  { label: '', oneRM: 100 }, { label: '', oneRM: 103 },
+  { label: '', oneRM: 107 },
+];
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+type TabMode = 'profil' | 'progres';
 
 interface SessionRow {
   date: string;
   sets: { exercise_name: string; reps: number; weight_kg: number }[] | null;
 }
-interface WeighIn { weight_kg: number; date: string }
 
-// ── Utility functions ────────────────────────────────────────────────────────
+// ── Utilities ────────────────────────────────────────────────────────────────
 
 function topExercises(sessions: SessionRow[]): string[] {
   const counts: Record<string, number> = {};
@@ -88,21 +86,6 @@ function oneRMPoints(sessions: SessionRow[], exercise: string): { label: string;
     }));
 }
 
-function weeklyVolumes(sessions: SessionRow[]): { label: string; volume: number; isCurrent: boolean }[] {
-  const weeks = Array.from({ length: 8 }, () => 0);
-  const now = Date.now();
-  for (const s of sessions) {
-    const diff = Math.floor((now - new Date(s.date).getTime()) / 86_400_000);
-    const w = Math.floor(diff / 7);
-    if (w >= 0 && w < 8) weeks[w] += (s.sets ?? []).reduce((a, x) => a + x.reps * x.weight_kg, 0);
-  }
-  return weeks.reverse().map((volume, i) => ({
-    label: i === 7 ? 'Auj.' : `S-${7 - i}`,
-    volume,
-    isCurrent: i === 7,
-  }));
-}
-
 function dayVolumes(sessions: SessionRow[]): Map<string, number> {
   const map = new Map<string, number>();
   for (const s of sessions) {
@@ -113,65 +96,37 @@ function dayVolumes(sessions: SessionRow[]): Map<string, number> {
   return map;
 }
 
-function countActiveWeeks(sessions: SessionRow[]): number {
-  const weeks = new Set<string>();
+function weeklyVolumes(sessions: SessionRow[]): { label: string; volume: number }[] {
+  const weekMap = new Map<string, number>();
   for (const s of sessions) {
     const d = new Date(s.date);
-    const day = d.getDay() || 7;
-    const thu = new Date(d);
-    thu.setDate(d.getDate() + (4 - day));
-    const y = thu.getFullYear();
-    const jan1 = new Date(y, 0, 1);
-    const w = Math.ceil(((thu.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
-    weeks.add(`${y}-W${w}`);
+    const dow = d.getDay();
+    const diffToMon = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMon);
+    const key = monday.toISOString().slice(0, 10);
+    const vol = (s.sets ?? []).reduce((a, x) => a + x.reps * x.weight_kg, 0);
+    weekMap.set(key, (weekMap.get(key) ?? 0) + vol);
   }
-  return weeks.size;
-}
 
-function pplDistrib(sessions: SessionRow[]): { label: string; mainMuscle: string; muscles: string[]; percent: number }[] {
-  const cutoff = Date.now() - 30 * 86_400_000;
-  const counts = { push: 0, pull: 0, legs: 0 };
-  let total = 0;
-  for (const s of sessions) {
-    if (new Date(s.date).getTime() < cutoff) continue;
-    for (const set of s.sets ?? []) {
-      const groups = new Set(getMusclesForExercise(set.exercise_name).map(m => MUSCLE_GROUPS[m]).filter(Boolean));
-      for (const g of groups) {
-        if (PUSH_MUSCLES.has(g)) { counts.push++; total++; break; }
-        if (PULL_MUSCLES.has(g)) { counts.pull++; total++; break; }
-        if (LEGS_MUSCLES.has(g)) { counts.legs++; total++; break; }
-      }
-    }
+  const now = new Date();
+  const dow = now.getDay();
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  const curMonday = new Date(now);
+  curMonday.setDate(now.getDate() + diffToMon);
+
+  const result: { label: string; volume: number }[] = [];
+  for (let i = 7; i >= 0; i--) {
+    const monday = new Date(curMonday);
+    monday.setDate(curMonday.getDate() - i * 7);
+    const key = monday.toISOString().slice(0, 10);
+    const label = i === 0
+      ? '●'
+      : String(monday.getDate());
+    result.push({ label, volume: weekMap.get(key) ?? 0 });
   }
-  const t = total || 1;
-  return [
-    { label: 'PUSH', mainMuscle: 'Pectoraux', muscles: ['Épaules', 'Triceps'], percent: Math.round((counts.push / t) * 100) },
-    { label: 'PULL', mainMuscle: 'Dos', muscles: ['Biceps', 'Trapèzes'], percent: Math.round((counts.pull / t) * 100) },
-    { label: 'LEGS', mainMuscle: 'Quadriceps', muscles: ['Ischio', 'Fessiers'], percent: Math.round((counts.legs / t) * 100) },
-  ];
+  return result;
 }
-
-// ── Chart dimensions ─────────────────────────────────────────────────────────
-
-const SECTION_PAD = 20;
-const CARD_PAD = 16;
-const CHART_W = SW - SECTION_PAD * 2 - CARD_PAD * 2; // inside card
-const VOL_W = SW - SECTION_PAD * 2;                   // no card
-const CP = { t: 20, b: 28, l: 36, r: 8 };
-
-// 1RM premium chart
-const ORM_CARD_PAD = 20;
-const ORM_W = SW - SECTION_PAD * 2 - ORM_CARD_PAD * 2;
-const ORM_H = 170;
-const ORM_PAD = { t: 14, b: 32, l: 0, r: 0 };
-const ORM_INNER_H = ORM_H - ORM_PAD.t - ORM_PAD.b;
-
-const GRID_WEEKS = 12;
-const GRID_DAYS = 7;
-const GRID_GAP = 3;
-const GRID_CELL = Math.floor((VOL_W - (GRID_WEEKS - 1) * GRID_GAP) / GRID_WEEKS);
-
-// ── Utilities ────────────────────────────────────────────────────────────────
 
 function smoothPath(pts: { x: number; y: number }[]): string {
   if (pts.length < 2) return '';
@@ -190,331 +145,445 @@ function smoothPath(pts: { x: number; y: number }[]): string {
   return d;
 }
 
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function SL({ children }: { children: string }) {
-  return <Text style={ss.sectionLabel}>{children}</Text>;
+function fmtKg(vol: number): string {
+  if (vol >= 1000) return `${(vol / 1000).toFixed(1).replace('.', ',')}t`;
+  return `${Math.round(vol)} kg`;
 }
 
-function VSep() {
-  return <View style={ss.vSep} />;
+const MUSCLE_GROUPS: { label: string; ids: string[] }[] = [
+  { label: 'Pectoraux', ids: ['pec', 'pec-2'] },
+  { label: 'Dos', ids: ['lats', 'trapezius', 'trapezius-front', 'lumbar'] },
+  { label: 'Épaules', ids: ['delt', 'delt-left', 'delt-right'] },
+  { label: 'Bras', ids: ['biceps', 'biceps-right', 'triceps'] },
+  { label: 'Jambes', ids: ['quadriceps', 'harmstring', 'gluteus', 'gluteus-front', 'adductor', 'gracilis', 'calves', 'calves-front'] },
+  { label: 'Abdos', ids: ['abs', 'oblique'] },
+];
+
+interface MuscleGroupVolume {
+  label: string;
+  volume: number;
+  exercises: { name: string; volume: number }[];
 }
 
-function OneRMAreaChart({ data }: { data: { label: string; oneRM: number }[] }) {
+function muscleGroupBreakdown(sessions: SessionRow[]): MuscleGroupVolume[] {
+  const groupExerciseVol: Record<string, Record<string, number>> = {};
+  for (const g of MUSCLE_GROUPS) groupExerciseVol[g.label] = {};
+
+  for (const s of sessions) {
+    for (const set of s.sets ?? []) {
+      const vol = set.reps * set.weight_kg;
+      if (vol <= 0) continue;
+      const muscles = getMusclesForExercise(set.exercise_name);
+      for (const g of MUSCLE_GROUPS) {
+        if (muscles.some(m => g.ids.includes(m))) {
+          groupExerciseVol[g.label][set.exercise_name] =
+            (groupExerciseVol[g.label][set.exercise_name] ?? 0) + vol;
+        }
+      }
+    }
+  }
+
+  return MUSCLE_GROUPS
+    .map(g => {
+      const exercises = Object.entries(groupExerciseVol[g.label])
+        .map(([name, volume]) => ({ name, volume }))
+        .sort((a, b) => b.volume - a.volume);
+      const volume = exercises.reduce((sum, e) => sum + e.volume, 0);
+      return { label: g.label, volume, exercises };
+    })
+    .sort((a, b) => b.volume - a.volume);
+}
+
+// ── Charts ───────────────────────────────────────────────────────────────────
+
+function OrmMountainChart({ data }: { data: { label: string; oneRM: number }[] }) {
+  const { theme } = useTheme();
   const revealAnim = useRef(new Animated.Value(0)).current;
+  const isDemo = data.length < 2;
+  const renderData = isDemo ? DEMO_DATA : data;
 
   useEffect(() => {
     revealAnim.setValue(0);
-    if (data.length < 2) return;
     Animated.timing(revealAnim, {
-      toValue: ORM_W + 4,
-      duration: 1000,
+      toValue: CHART_W + 4,
+      duration: 800,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   }, [data]);
 
-  if (data.length < 2) {
-    return (
-      <View style={ss.cardPremium}>
-        <View style={{ height: 80, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Pas assez de données sur cet exercice</Text>
-        </View>
-      </View>
-    );
-  }
-
-  const first = data[0];
-  const last = data[data.length - 1];
-  const delta = last.oneRM - first.oneRM;
-  const deltaLabel = `${delta >= 0 ? '+' : ''}${delta} kg depuis ${first.label}`;
-
-  const minV = Math.min(...data.map(d => d.oneRM));
-  const maxV = Math.max(...data.map(d => d.oneRM));
-  const padding = (maxV - minV || 10) * 0.12;
-  const lo = minV - padding;
-  const hi = maxV + padding;
+  const minV = Math.min(...renderData.map(d => d.oneRM));
+  const maxV = Math.max(...renderData.map(d => d.oneRM));
+  const pad  = (maxV - minV || 10) * 0.15;
+  const lo   = minV - pad;
+  const hi   = maxV + pad;
   const span = hi - lo;
 
-  const pts = data.map((d, i) => ({
-    x: (i / (data.length - 1)) * ORM_W,
-    y: ORM_PAD.t + ((hi - d.oneRM) / span) * ORM_INNER_H,
-    label: d.label,
-    oneRM: d.oneRM,
+  const pts = renderData.map((d, i) => ({
+    x: (i / (renderData.length - 1)) * CHART_W,
+    y: 8 + ((hi - d.oneRM) / span) * CHART_INNER,
   }));
 
   const linePath = smoothPath(pts);
-  const lastPt = pts[pts.length - 1];
+  const last = pts[pts.length - 1];
   const areaPath =
     `${linePath} ` +
-    `L${lastPt.x.toFixed(1)},${(ORM_PAD.t + ORM_INNER_H).toFixed(1)} ` +
-    `L${pts[0].x.toFixed(1)},${(ORM_PAD.t + ORM_INNER_H).toFixed(1)} Z`;
-
-  // 4 evenly-spaced X labels
-  const xIndices = new Set<number>([0, data.length - 1]);
-  const step = Math.max(1, Math.floor((data.length - 1) / 3));
-  for (let i = step; i < data.length - 1; i += step) xIndices.add(i);
-
-  // Floating tooltip above last point
-  const TT_W = 80;
-  const TT_H = 36;
-  const TT_X = Math.max(0, Math.min(lastPt.x - TT_W / 2, ORM_W - TT_W));
-  const TT_Y = Math.max(2, lastPt.y - TT_H - 12);
+    `L${last.x.toFixed(1)},${(8 + CHART_INNER).toFixed(1)} ` +
+    `L${pts[0].x.toFixed(1)},${(8 + CHART_INNER).toFixed(1)} Z`;
 
   return (
-    <View style={ss.cardPremium}>
-      {/* ── Header ── */}
-      <Text style={ss.ormValue}>{last.oneRM} kg</Text>
-      <Text style={ss.ormDelta}>{deltaLabel}</Text>
-
-      {/* ── Chart ── */}
-      <View style={{ marginTop: 14 }}>
-        <Svg width={ORM_W} height={ORM_H}>
-          <Defs>
-            <SvgGradient id="ormGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={BRAND} stopOpacity="0.30" />
-              <Stop offset="1" stopColor={BRAND} stopOpacity="0" />
-            </SvgGradient>
-            <ClipPath id="ormReveal">
-              <AnimatedRect x={-2} y={0} width={revealAnim} height={ORM_H + 10} />
-            </ClipPath>
-          </Defs>
-
-          {/* Subtle grid lines */}
-          {[0, 0.33, 0.66, 1].map((t, i) => (
-            <Line key={i}
-              x1={0} y1={ORM_PAD.t + t * ORM_INNER_H}
-              x2={ORM_W} y2={ORM_PAD.t + t * ORM_INNER_H}
-              stroke="rgba(255,255,255,0.03)" strokeWidth={1}
-            />
-          ))}
-
-          {/* Animated chart body */}
-          <G clipPath="url(#ormReveal)">
-            <Path d={areaPath} fill="url(#ormGrad)" />
-            <Path d={linePath} stroke={BRAND} strokeWidth={2.5}
-                  fill="none" strokeLinecap="round" strokeLinejoin="round" />
-
-            {/* Glow halo */}
-            <Circle cx={lastPt.x} cy={lastPt.y} r={18}
-                    fill="rgba(200,241,53,0.12)" />
-            {/* Live dot */}
-            <Circle cx={lastPt.x} cy={lastPt.y} r={5} fill="#FFFFFF" />
-
-            {/* Tooltip connector */}
-            <Line
-              x1={lastPt.x} y1={TT_Y + TT_H}
-              x2={lastPt.x} y2={lastPt.y - 6}
-              stroke="rgba(200,241,53,0.22)" strokeWidth={1}
-              strokeDasharray="2 3"
-            />
-            {/* Tooltip card */}
-            <Rect x={TT_X} y={TT_Y} width={TT_W} height={TT_H} rx={9}
-                  fill="#1A2510" />
-            <Rect x={TT_X} y={TT_Y} width={TT_W} height={TT_H} rx={9}
-                  fill="none" stroke="rgba(200,241,53,0.18)" strokeWidth={0.5} />
-            <SvgText x={TT_X + TT_W / 2} y={TT_Y + 13}
-                     textAnchor="middle" fontSize={9} fill={TEXT_DIM}>
-              {last.label}
-            </SvgText>
-            <SvgText x={TT_X + TT_W / 2} y={TT_Y + 27}
-                     textAnchor="middle" fontSize={12} fontWeight="bold" fill="#FFFFFF">
-              {last.oneRM} kg
-            </SvgText>
-          </G>
-
-          {/* X-axis labels — always visible */}
-          {pts.map((p, i) => {
-            if (!xIndices.has(i)) return null;
-            const anchor = i === 0 ? 'start' : i === data.length - 1 ? 'end' : 'middle';
-            return (
-              <SvgText key={i} x={p.x} y={ORM_H - 6}
-                       textAnchor={anchor} fontSize={10} fill={TEXT_DIM}>
-                {p.label}
-              </SvgText>
-            );
-          })}
-        </Svg>
-      </View>
-    </View>
-  );
-}
-
-function ActivityGrid({ volumes }: { volumes: Map<string, number> }) {
-  const numDays = GRID_WEEKS * GRID_DAYS;
-  const start = new Date(Date.now() - (numDays - 1) * 86_400_000);
-  const maxVol = Math.max(...Array.from(volumes.values()), 1);
-
-  function color(date: string): string {
-    const v = volumes.get(date) ?? 0;
-    if (v === 0) return '#1A1A1A';
-    const r = v / maxVol;
-    if (r < 0.25) return '#4A5E1A';
-    if (r < 0.6)  return '#7A9A1A';
-    return BRAND;
-  }
-
-  const weeks: string[][] = Array.from({ length: GRID_WEEKS }, (_, wi) =>
-    Array.from({ length: GRID_DAYS }, (_, di) => {
-      const d = new Date(start.getTime() + (wi * 7 + di) * 86_400_000);
-      return d.toISOString().slice(0, 10);
-    })
-  );
-
-  return (
-    <View style={{ flexDirection: 'row', gap: GRID_GAP }}>
-      {weeks.map((week, wi) => (
-        <View key={wi} style={{ gap: GRID_GAP }}>
-          {week.map(date => (
-            <View
-              key={date}
-              style={{ width: GRID_CELL, height: GRID_CELL, borderRadius: 2, backgroundColor: color(date) }}
-            />
-          ))}
+    <View style={{ marginTop: 14 }}>
+      <Svg width={CHART_W} height={CHART_H}>
+        <Defs>
+          <SvgGradient id="mtnGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={theme.brand} stopOpacity={isDemo ? '0.10' : '0.45'} />
+            <Stop offset="0.6" stopColor={theme.brand} stopOpacity={isDemo ? '0.04' : '0.12'} />
+            <Stop offset="1" stopColor={theme.brand} stopOpacity="0" />
+          </SvgGradient>
+          <ClipPath id="mtnReveal">
+            <AnimatedRect x={-2} y={0} width={revealAnim} height={CHART_H + 10} />
+          </ClipPath>
+        </Defs>
+        <G clipPath="url(#mtnReveal)">
+          <Path d={areaPath} fill="url(#mtnGrad)" />
+          <Path
+            d={linePath}
+            stroke={theme.brand}
+            strokeWidth={isDemo ? 1.5 : 2.5}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={isDemo ? '6 4' : undefined}
+            opacity={isDemo ? 0.35 : 1}
+          />
+          {!isDemo && (
+            <>
+              <Circle cx={last.x} cy={last.y} r={16} fill={theme.brand + '18'} />
+              <Circle cx={last.x} cy={last.y} r={8} fill={theme.brand + '30'} />
+              <Circle cx={last.x} cy={last.y} r={4} fill="#FFFFFF" />
+            </>
+          )}
+        </G>
+      </Svg>
+      {isDemo && (
+        <View style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          justifyContent: 'center', alignItems: 'center',
+        }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 12, textAlign: 'center' }}>
+            Continue à logger pour voir ta vraie progression
+          </Text>
         </View>
-      ))}
+      )}
     </View>
   );
 }
 
-function VolumeBarChart({ data }: { data: { label: string; volume: number; isCurrent: boolean }[] }) {
-  const H = 140;
-  const innerH = H - 8 - 32;
-  const n = data.length;
-  const gap = 6;
-  const bw = (VOL_W - gap * (n - 1)) / n;
-  const maxVol = Math.max(...data.map(d => d.volume), 1);
+function WeeklyVolumeChart({ weeks }: { weeks: { label: string; volume: number }[] }) {
+  const { theme } = useTheme();
+  const revealAnim = useRef(new Animated.Value(CHART_H + 4)).current;
 
-  if (data.every(d => d.volume === 0)) {
-    return (
-      <View style={{ height: H, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Aucune donnée ces 8 semaines</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    revealAnim.setValue(CHART_H + 4);
+    Animated.timing(revealAnim, {
+      toValue: 0,
+      duration: 750,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [weeks.length]);
 
-  return (
-    <Svg width={VOL_W} height={H}>
-      {data.map((d, i) => {
-        const bh = Math.max((d.volume / maxVol) * innerH, d.volume > 0 ? 4 : 0);
-        const x = i * (bw + gap);
-        const y = 8 + innerH - bh;
-        const fill = d.isCurrent ? BRAND : ACCENT_DARK;
-        return (
-          <G key={i}>
-            <Rect x={x} y={y} width={bw} height={bh} rx={4} ry={4} fill={fill} />
-            <SvgText x={x + bw / 2} y={H - 16} textAnchor="middle" fontSize={8} fill={d.isCurrent ? BRAND : TEXT_DIM}>
-              {d.label}
-            </SvgText>
-            {d.volume > 0 && (
-              <SvgText x={x + bw / 2} y={H - 4} textAnchor="middle" fontSize={7} fill={TEXT_DIM}>
-                {d.volume >= 1000 ? `${Math.round(d.volume / 1000)}t` : `${Math.round(d.volume)}kg`}
-              </SvgText>
-            )}
-          </G>
-        );
-      })}
-    </Svg>
-  );
-}
+  if (!weeks.length) return null;
 
-function PplTiles({ data }: { data: { label: string; mainMuscle: string; muscles: string[]; percent: number }[] }) {
-  const tileW = (SW - SECTION_PAD * 2 - 10 * 2) / 3;
-  return (
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      {data.map(item => (
-        <View key={item.label} style={[ss.pplTile, { width: tileW }]}>
-          <Text style={ss.pplLabel}>{item.label}</Text>
-          <Text style={ss.pplPercent}>{item.percent}%</Text>
-          <Text style={ss.pplMain}>{item.mainMuscle}</Text>
-          {item.muscles.map(m => (
-            <Text key={m} style={ss.pplMuscle}>{m}</Text>
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
+  const BAR_GAP = 6;
+  const barW    = (CHART_W - BAR_GAP * (weeks.length - 1)) / weeks.length;
+  const maxVol  = Math.max(...weeks.map(w => w.volume), 1);
+  const BASE_Y  = 8 + CHART_INNER;
 
-function WeightMiniChart({ data }: { data: WeighIn[] }) {
-  const H = 120;
-  const WCP = { t: 12, b: 24, l: 32, r: 8 };
-  const innerW = CHART_W - WCP.l - WCP.r;
-  const innerH = H - WCP.t - WCP.b;
-
-  if (data.length < 2) {
-    return (
-      <View style={{ height: H, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Ajoute des pesées pour voir ta courbe</Text>
-      </View>
-    );
-  }
-
-  const weights = data.map(d => d.weight_kg);
-  const minW = Math.min(...weights) - 1;
-  const maxW = Math.max(...weights) + 1;
-  const range = maxW - minW || 1;
-
-  const pts = data.map((d, i) => ({
-    x: WCP.l + (i / (data.length - 1)) * innerW,
-    y: WCP.t + ((maxW - d.weight_kg) / range) * innerH,
-    date: d.date,
+  // Horizontal grid lines
+  const gridLines = [0.25, 0.5, 0.75, 1].map(f => ({
+    y: 8 + CHART_INNER * (1 - f),
+    vol: Math.round(maxVol * f),
   }));
 
-  const lineD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const areaD = `${lineD} L${pts[pts.length - 1].x.toFixed(1)},${(WCP.t + innerH).toFixed(1)} L${pts[0].x.toFixed(1)},${(WCP.t + innerH).toFixed(1)} Z`;
-  const step = Math.max(1, Math.floor(data.length / 3));
+  return (
+    <View style={{ marginTop: 14 }}>
+      <Svg width={CHART_W} height={CHART_H}>
+        <Defs>
+          <SvgGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0"    stopColor={theme.brand} stopOpacity="0.90" />
+            <Stop offset="0.55" stopColor={theme.brand} stopOpacity="0.45" />
+            <Stop offset="1"    stopColor={theme.brand} stopOpacity="0.06" />
+          </SvgGradient>
+          <ClipPath id="volReveal">
+            <AnimatedRect x={-2} y={revealAnim} width={CHART_W + 4} height={CHART_H + 10} />
+          </ClipPath>
+        </Defs>
+
+        {/* Grid lines */}
+        {gridLines.map(gl => (
+          <SvgLine
+            key={gl.y}
+            x1={0} y1={gl.y.toFixed(1)}
+            x2={CHART_W} y2={gl.y.toFixed(1)}
+            stroke="#FFFFFF"
+            strokeOpacity="0.04"
+            strokeWidth="1"
+          />
+        ))}
+
+        <G clipPath="url(#volReveal)">
+          {weeks.map((w, i) => {
+            const barH   = Math.max((w.volume / maxVol) * CHART_INNER, w.volume > 0 ? 5 : 0);
+            const x      = i * (barW + BAR_GAP);
+            const y      = BASE_Y - barH;
+            const isCurr = i === weeks.length - 1;
+            return (
+              <Rect
+                key={i}
+                x={x} y={w.volume > 0 ? y : BASE_Y - 3}
+                width={barW}
+                height={w.volume > 0 ? barH : 3}
+                rx={5}
+                fill={w.volume > 0 ? 'url(#volGrad)' : '#1E1E1E'}
+                opacity={isCurr ? 1 : w.volume > 0 ? 0.6 : 1}
+              />
+            );
+          })}
+
+          {/* Dot on current week bar */}
+          {weeks[weeks.length - 1]?.volume > 0 && (() => {
+            const i = weeks.length - 1;
+            const barH = (weeks[i].volume / maxVol) * CHART_INNER;
+            const cx = i * (barW + BAR_GAP) + barW / 2;
+            const cy = BASE_Y - barH;
+            return (
+              <>
+                <Circle cx={cx} cy={cy} r={12} fill={theme.brand + '20'} />
+                <Circle cx={cx} cy={cy} r={4} fill={theme.brand} />
+              </>
+            );
+          })()}
+        </G>
+      </Svg>
+
+      {/* Week labels */}
+      <View style={{ flexDirection: 'row', marginTop: 5 }}>
+        {weeks.map((w, i) => (
+          <View
+            key={i}
+            style={{
+              width: barW,
+              marginRight: i < weeks.length - 1 ? BAR_GAP : 0,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{
+              color: i === weeks.length - 1 ? theme.brand : theme.textMuted,
+              fontSize: 10,
+              fontWeight: i === weeks.length - 1 ? '900' : '400',
+            }}>
+              {w.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ActivityDots({ volumes }: { volumes: Map<string, number> }) {
+  const { theme, mode } = useTheme();
+  const numDays = COLS * ROWS;
+  const start   = new Date(Date.now() - (numDays - 1) * 86_400_000);
+  const maxVol  = Math.max(...Array.from(volumes.values()), 1);
+
+  function dotColor(date: string): string {
+    const v = volumes.get(date) ?? 0;
+    if (v === 0) return mode === 'dark' ? '#1C1C1C' : '#E8E8E8';
+    const r = v / maxVol;
+    if (r < 0.25) return 'rgba(200,241,53,0.20)';
+    if (r < 0.60) return 'rgba(200,241,53,0.42)';
+    return 'rgba(200,241,53,0.72)';
+  }
+
+  const dates = Array.from({ length: numDays }, (_, i) => {
+    const d = new Date(start.getTime() + i * 86_400_000);
+    return d.toISOString().slice(0, 10);
+  });
 
   return (
-    <Svg width={CHART_W} height={H}>
-      <Defs>
-        <SvgGradient id="wgt" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={BRAND} stopOpacity="0.15" />
-          <Stop offset="1" stopColor={BRAND} stopOpacity="0" />
-        </SvgGradient>
-      </Defs>
-      <SvgText x={0} y={WCP.t + 6} fontSize={9} fill={TEXT_DIM}>{Math.round(maxW)}kg</SvgText>
-      <SvgText x={0} y={WCP.t + innerH} fontSize={9} fill={TEXT_DIM}>{Math.round(minW)}kg</SvgText>
-      <Path d={areaD} fill="url(#wgt)" />
-      <Path d={lineD} stroke={BRAND} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      {pts.map((p, i) => (
-        <Circle key={i} cx={p.x} cy={p.y} r={3} fill={BG} stroke={BRAND} strokeWidth={1.5} />
+    <View style={{
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: GRID_GAP,
+      width: GRID_W,
+      marginTop: 14,
+    }}>
+      {dates.map(date => (
+        <View
+          key={date}
+          style={{
+            width: DOT_SIZE,
+            height: DOT_SIZE,
+            borderRadius: 2,
+            backgroundColor: dotColor(date),
+          }}
+        />
       ))}
-      {pts.map((p, i) => {
-        if (i % step !== 0 && i !== data.length - 1) return null;
-        const label = new Date(p.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    </View>
+  );
+}
+
+function MuscleVolumeAccordion({ groups }: { groups: MuscleGroupVolume[] }) {
+  const { theme } = useTheme();
+  const [openLabel, setOpenLabel] = useState<string | null>(null);
+
+  return (
+    <View style={{ marginTop: 14, gap: 8 }}>
+      {groups.map(g => {
+        const isOpen = openLabel === g.label;
         return (
-          <SvgText key={i} x={p.x} y={H - 4} textAnchor="middle" fontSize={8} fill={TEXT_DIM}>
-            {label}
-          </SvgText>
+          <View
+            key={g.label}
+            style={{
+              borderRadius: 12, borderWidth: 1, borderColor: theme.border,
+              backgroundColor: theme.surface, overflow: 'hidden',
+            }}
+          >
+            <Pressable
+              onPress={() => setOpenLabel(isOpen ? null : g.label)}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                paddingHorizontal: 16, paddingVertical: 14,
+              }}
+            >
+              <Text style={{ color: theme.textPrimary, fontSize: 14, fontWeight: '600' }}>{g.label}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                  {g.volume > 0 ? fmtKg(g.volume) : '—'}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>{isOpen ? '▲' : '▼'}</Text>
+              </View>
+            </Pressable>
+            {isOpen && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 14, gap: 8 }}>
+                {g.exercises.length === 0 ? (
+                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>Pas encore de données</Text>
+                ) : g.exercises.map(e => (
+                  <View key={e.name} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13, flex: 1, marginRight: 8 }}>{e.name}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{fmtKg(e.volume)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         );
       })}
-    </Svg>
+    </View>
   );
 }
 
 function SettingsModal({ visible, onClose, onSignOut }: {
   visible: boolean; onClose: () => void; onSignOut: () => void;
 }) {
+  const { theme } = useTheme();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer mon compte',
+      'Cette action est définitive : ton profil, tes séances et ton historique seront supprimés sans possibilité de récupération.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirmer la suppression',
+              'Es-tu sûr ? Cette dernière étape est irréversible.',
+              [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                  text: 'Supprimer définitivement',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setDeleting(true);
+                    const { error } = await supabase.functions.invoke('delete-account');
+                    if (error) {
+                      setDeleting(false);
+                      Alert.alert('Erreur', "La suppression a échoué. Réessaie ou contacte le support.");
+                      return;
+                    }
+                    await supabase.auth.signOut();
+                    setDeleting(false);
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: SURFACE }}>
-        <View style={ss.modalHeader}>
-          <Text style={ss.modalTitle}>Paramètres</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.surface }}>
+        <View style={[ss.modalHeader, { borderBottomColor: theme.border }]}>
+          <Text style={[ss.modalTitle, { color: theme.textPrimary }]}>Paramètres</Text>
           <Pressable onPress={onClose}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 15 }}>Fermer</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 15 }}>Fermer</Text>
           </Pressable>
         </View>
-        <View style={{ paddingHorizontal: 20, paddingTop: 16, gap: 1 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
           {(['Mon profil', 'Objectifs'] as const).map(label => (
-            <Pressable key={label} style={ss.settingsRow}>
-              <Text style={ss.settingsRowLabel}>{label}</Text>
-              <Text style={{ color: '#444', fontSize: 18 }}>›</Text>
+            <Pressable key={label} style={[ss.settingsRow, { backgroundColor: theme.surface }]}>
+              <Text style={[ss.settingsRowLabel, { color: theme.textPrimary }]}>{label}</Text>
+              <Text style={{ color: theme.textMuted, fontSize: 18 }}>›</Text>
             </Pressable>
           ))}
+          <Pressable
+            style={[ss.settingsRow, { backgroundColor: theme.surface }]}
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+          >
+            <Text style={[ss.settingsRowLabel, { color: theme.textPrimary }]}>Politique de confidentialité</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 18 }}>›</Text>
+          </Pressable>
+          {/* Outils de dev — à retirer avant App Store */}
+          <Pressable
+            style={[ss.settingsRow, { backgroundColor: theme.surface }]}
+            onPress={() => RevenueCatUI.presentPaywall()}
+          >
+            <Text style={[ss.settingsRowLabel, { color: theme.textPrimary }]}>Tester le paywall</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 18 }}>›</Text>
+          </Pressable>
+          <Pressable
+            style={[ss.settingsRow, { backgroundColor: theme.surface }]}
+            onPress={async () => {
+              await AsyncStorage.removeItem('attiks_onboard_v1');
+              onClose();
+              router.replace('/(onboarding)/onboard');
+            }}
+          >
+            <Text style={[ss.settingsRowLabel, { color: theme.textPrimary }]}>Relancer l'onboarding</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 18 }}>›</Text>
+          </Pressable>
         </View>
         <Pressable onPress={onSignOut} style={{ alignItems: 'center', paddingVertical: 20, marginTop: 24 }}>
-          <Text style={{ color: '#FF3B30', fontSize: 15, fontWeight: '500' }}>Déconnexion</Text>
+          <Text style={{ color: theme.danger, fontSize: 15, fontWeight: '500' }}>Déconnexion</Text>
+        </Pressable>
+        <Pressable
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+          style={{ alignItems: 'center', paddingVertical: 20, flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+        >
+          {deleting && <ActivityIndicator size="small" color={theme.textMuted} />}
+          <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>Supprimer mon compte</Text>
         </Pressable>
       </SafeAreaView>
     </Modal>
@@ -525,58 +594,52 @@ function SettingsModal({ visible, onClose, onSignOut }: {
 
 export default function ProfileScreen() {
   const { user } = useAuth();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { muscleColors } = useRecoveryScore(user?.id);
-  const bottomPad = 65 + insets.bottom + 20;
+  const { theme } = useTheme();
+  const { score, muscleColors } = useRecoveryScore(user?.id);
 
+  const [tabMode, setTabMode] = useState<TabMode>('profil');
   const [pseudo, setPseudo] = useState('');
-  const [heightCm, setHeightCm] = useState<number | null>(null);
-  const [latestWeight, setLatestWeight] = useState<number | null>(null);
-  const [weightHistory, setWeightHistory] = useState<WeighIn[]>([]);
-  const [sessionCount, setSessionCount] = useState(0);
-  const [prCount, setPrCount] = useState(0);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [selectedEx, setSelectedEx] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
-  const sectionAnims = useRef(Array.from({ length: 7 }, () => new Animated.Value(0))).current;
+  const sectionAnims = useRef(Array.from({ length: 5 }, () => new Animated.Value(0))).current;
+  const tabAnim      = useRef(new Animated.Value(0)).current;
 
-  const dayVols   = useMemo(() => dayVolumes(sessions), [sessions]);
-  const weekVols  = useMemo(() => weeklyVolumes(sessions), [sessions]);
-  const topEx     = useMemo(() => topExercises(sessions), [sessions]);
-  const oneRM     = useMemo(() => selectedEx ? oneRMPoints(sessions, selectedEx) : [], [sessions, selectedEx]);
-  const ppl       = useMemo(() => pplDistrib(sessions), [sessions]);
-  const weekCount = useMemo(() => countActiveWeeks(sessions), [sessions]);
+  const topEx      = useMemo(() => topExercises(sessions), [sessions]);
+  const oneRM      = useMemo(() => selectedEx ? oneRMPoints(sessions, selectedEx) : [], [sessions, selectedEx]);
+  const dayVols    = useMemo(() => dayVolumes(sessions), [sessions]);
+  const weekVols   = useMemo(() => weeklyVolumes(sessions), [sessions]);
+  const muscleGroups = useMemo(() => muscleGroupBreakdown(sessions), [sessions]);
+
+  const currentWeekVol = weekVols.length > 0 ? weekVols[weekVols.length - 1].volume : 0;
+  const prevWeekVol    = weekVols.length >= 2 ? weekVols[weekVols.length - 2].volume : 0;
+  const weekVolDelta   = currentWeekVol - prevWeekVol;
+
+  const currentORM = oneRM.length > 0 ? oneRM[oneRM.length - 1].oneRM : null;
+  const deltaORM   = oneRM.length >= 2 ? currentORM! - oneRM[0].oneRM : null;
 
   useEffect(() => {
-    Animated.stagger(80, sectionAnims.map(a =>
-      Animated.timing(a, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+    Animated.stagger(70, sectionAnims.map(a =>
+      Animated.timing(a, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true })
     )).start();
   }, []);
 
   useEffect(() => {
+    Animated.timing(tabAnim, {
+      toValue: tabMode === 'profil' ? 0 : 1,
+      duration: 200,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [tabMode]);
+
+  useEffect(() => {
     if (!user) return;
 
-    supabase.from('user_profiles').select('pseudo, height_cm').eq('id', user.id).single()
-      .then(({ data }) => {
-        if (data) { setPseudo(data.pseudo ?? ''); setHeightCm((data as any).height_cm ?? null); }
-      });
-
-    supabase.from('weigh_ins').select('weight_kg, date').eq('user_id', user.id)
-      .order('date', { ascending: false }).limit(1).single()
-      .then(({ data }) => { if (data) setLatestWeight(data.weight_kg); });
-
-    supabase.from('weigh_ins').select('weight_kg, date').eq('user_id', user.id)
-      .order('date', { ascending: true }).limit(20)
-      .then(({ data }) => { if (data) setWeightHistory(data); });
-
-    supabase.from('sessions').select('id', { count: 'exact' }).eq('user_id', user.id)
-      .then(({ count }) => setSessionCount(count ?? 0));
-
-    supabase.from('sets').select('id, sessions!inner(user_id)', { count: 'exact' })
-      .eq('sessions.user_id', user.id).eq('is_pr', true)
-      .then(({ count }) => setPrCount(count ?? 0));
+    supabase.from('user_profiles').select('pseudo').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setPseudo(data.pseudo ?? ''); });
 
     const since = new Date();
     since.setDate(since.getDate() - 90);
@@ -600,141 +663,166 @@ export default function ProfileScreen() {
     ]);
   }
 
-  const initials = (pseudo || user?.email || 'A').slice(0, 1).toUpperCase();
-  const subtitle = [heightCm ? `${heightCm} cm` : null, latestWeight ? `${latestWeight} kg` : null].filter(Boolean).join(' · ');
-
   const sect = (i: number) => ({
     opacity: sectionAnims[i],
-    transform: [{ translateY: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+    transform: [{ translateY: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
   });
 
   return (
-    <SafeAreaView style={ss.root}>
+    <SafeAreaView style={[ss.root, { backgroundColor: theme.bg }]}>
       <GradientOrb />
       <SettingsModal visible={showSettings} onClose={() => setShowSettings(false)} onSignOut={handleSignOut} />
 
-      <ScrollView contentContainerStyle={[ss.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
-
-        {/* ── 1. HEADER ────────────────────────────────────── */}
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── HEADER ─────────────────────────────────────────── */}
         <Animated.View style={[ss.section, sect(0)]}>
           <View style={ss.headerRow}>
-            <View style={ss.avatar}>
-              <Text style={ss.avatarTxt}>{initials}</Text>
-            </View>
             <View style={{ flex: 1 }}>
-              <Text style={ss.headerName}>{pseudo || 'Athlète'}</Text>
-              {!!subtitle && <Text style={ss.headerSub}>{subtitle}</Text>}
+              <Text style={[ss.headerName, { color: theme.textPrimary }]}>{pseudo || 'Athlète'}</Text>
             </View>
-            <Pressable onPress={() => setShowSettings(true)} style={ss.settingsBtn}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 22, lineHeight: 26 }}>⚙</Text>
+            <Pressable onPress={() => setShowSettings(true)} hitSlop={12}>
+              <Text style={[ss.settingsIcon, { color: theme.textMuted }]}>⚙</Text>
             </Pressable>
           </View>
 
-          <View style={ss.statsRow}>
-            <View style={ss.statItem}>
-              <Text style={ss.statValue}>{sessionCount}</Text>
-              <Text style={ss.statLabel}>SÉANCES</Text>
-            </View>
-            <VSep />
-            <View style={ss.statItem}>
-              <Text style={ss.statValue}>{prCount}</Text>
-              <Text style={ss.statLabel}>RECORDS</Text>
-            </View>
-            <VSep />
-            <View style={ss.statItem}>
-              <Text style={ss.statValue}>{weekCount}</Text>
-              <Text style={ss.statLabel}>SEMAINES</Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* ── 2. RÉCUPÉRATION MUSCULAIRE ───────────────────── */}
-        <Animated.View style={[ss.section, sect(1)]}>
-          <SL>RÉCUPÉRATION MUSCULAIRE</SL>
-        </Animated.View>
-        <MuscleMap muscleColors={muscleColors} />
-
-        {/* ── 3. PROGRESSION 1RM ───────────────────────────── */}
-        <Animated.View style={[ss.section, sect(2)]}>
-          <SL>PROGRESSION · 1RM ESTIMÉ</SL>
-          {topEx.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={ss.pillScroll}
-              contentContainerStyle={ss.pillContent}
-            >
-              {topEx.map(ex => (
-                <Pressable
-                  key={ex}
-                  onPress={() => setSelectedEx(ex)}
-                  style={[ss.pill, selectedEx === ex && ss.pillActive]}
-                >
-                  <Text style={[ss.pillTxt, selectedEx === ex && ss.pillTxtActive]}>{ex}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-          <OneRMAreaChart data={oneRM} />
-        </Animated.View>
-
-        {/* ── 4. RÉGULARITÉ ────────────────────────────────── */}
-        <Animated.View style={[ss.section, sect(3)]}>
-          <SL>RÉGULARITÉ</SL>
-          <ActivityGrid volumes={dayVols} />
-          <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
-            {[
-              { color: '#1A1A1A', label: 'Repos' },
-              { color: '#4A5E1A', label: 'Léger' },
-              { color: '#7A9A1A', label: 'Moyen' },
-              { color: BRAND,     label: 'Intense' },
-            ].map(({ color, label }) => (
-              <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
-                <Text style={{ color: TEXT_DIM, fontSize: 10, fontWeight: '600' }}>{label}</Text>
-              </View>
+          {/* ── Tab switcher ── */}
+          <View style={ss.tabBar}>
+            {([['profil', 'Profil'], ['progres', 'Progrès']] as [TabMode, string][]).map(([key, label]) => (
+              <Pressable
+                key={key}
+                onPress={() => setTabMode(key)}
+                style={[
+                  ss.tabBtn,
+                  { backgroundColor: tabMode === key ? theme.brand + '1A' : 'transparent' },
+                ]}
+                hitSlop={8}
+              >
+                <Text style={[
+                  ss.tabLabel,
+                  { color: tabMode === key ? theme.brand : theme.textMuted },
+                ]}>
+                  {label}
+                </Text>
+              </Pressable>
             ))}
           </View>
-          {sessions.length > 0 && (
-            <Text style={[ss.gridStat, { marginTop: 8 }]}>
-              {(sessions.length / (weekCount || 1)).toFixed(1)} séances / semaine en moyenne
-            </Text>
-          )}
         </Animated.View>
 
-        {/* ── 5. VOLUME ────────────────────────────────────── */}
-        <Animated.View style={[ss.section, sect(4)]}>
-          <SL>VOLUME · 8 SEMAINES</SL>
-          <VolumeBarChart data={weekVols} />
-        </Animated.View>
+        {/* ═══════════════════════════════════════════════════
+            TAB PROFIL — Recovery + Muscle Map
+        ═══════════════════════════════════════════════════ */}
+        {tabMode === 'profil' && (
+          <Animated.View style={sect(1)}>
+            <View style={ss.section}>
+              <Text style={[ss.recoveryBig, { color: theme.textPrimary }]}>
+                Recovery <Text style={{ color: theme.brand }}>{score}%</Text>
+              </Text>
+            </View>
+            <View style={ss.pantinWrapper}>
+              <MuscleMap muscleColors={muscleColors} height={PANTIN_HEIGHT} />
+            </View>
+            <View style={{ paddingHorizontal: SECTION_PAD }}>
+              <Text style={[ss.sectionSub, { color: theme.textMuted, marginTop: 6 }]}>
+                VOLUME PAR GROUPE MUSCULAIRE
+              </Text>
+              <MuscleVolumeAccordion groups={muscleGroups} />
+            </View>
+          </Animated.View>
+        )}
 
-        {/* ── 6. RÉPARTITION PPL ───────────────────────────── */}
-        <Animated.View style={[ss.section, sect(5)]}>
-          <SL>GROUPES MUSCULAIRES · 30J</SL>
-          <PplTiles data={ppl} />
-        </Animated.View>
+        {/* ═══════════════════════════════════════════════════
+            TAB PROGRÈS — Volume + 1RM + Activity
+        ═══════════════════════════════════════════════════ */}
+        {tabMode === 'progres' && (
+          <>
+            {/* ── Volume hebdomadaire ── */}
+            <Animated.View style={[ss.section, { marginTop: 24 }, sect(2)]}>
+              <Text style={[ss.ormBig, { color: theme.textPrimary }]}>
+                {currentWeekVol > 0 ? fmtKg(currentWeekVol) : '— kg'}
+              </Text>
+              {weekVolDelta !== 0 && prevWeekVol > 0 && (
+                <Text style={[ss.ormDelta, {
+                  color: weekVolDelta >= 0 ? theme.brand : theme.danger,
+                }]}>
+                  {weekVolDelta >= 0 ? '+' : ''}{fmtKg(weekVolDelta)} vs semaine dernière
+                </Text>
+              )}
+              <Text style={[ss.sectionSub, { color: theme.textMuted, marginTop: 6 }]}>
+                VOLUME HEBDOMADAIRE
+              </Text>
+              <WeeklyVolumeChart weeks={weekVols} />
+            </Animated.View>
 
-        {/* ── 7. PESÉE ─────────────────────────────────────── */}
-        <Animated.View style={[ss.section, sect(6)]}>
-          <SL>POIDS CORPOREL</SL>
-          <View style={ss.card}>
-            <WeightMiniChart data={weightHistory} />
-          </View>
-          <Pressable style={ss.addWeightBtn}>
-            <Text style={ss.addWeightTxt}>+ Ajouter une pesée</Text>
-          </Pressable>
-        </Animated.View>
+            {/* ── Divider ── */}
+            <View style={[ss.divider, { backgroundColor: theme.border }]} />
 
-        {__DEV__ && (
-          <Pressable
-            onPress={async () => {
-              await AsyncStorage.removeItem('attiks_onboard_v1');
-              router.replace('/(onboarding)/onboard');
-            }}
-            style={{ alignItems: 'center', paddingVertical: 12 }}
-          >
-            <Text style={{ color: '#C8F13530', fontSize: 11 }}>🔁 Rejouer l'onboarding (dev)</Text>
-          </Pressable>
+            {/* ── 1RM progression ── */}
+            <Animated.View style={[ss.section, sect(3)]}>
+              <Text style={[ss.ormBig, { color: theme.textPrimary }]}>
+                {currentORM != null ? `${currentORM} KG` : '— KG'}
+              </Text>
+              {deltaORM != null && (
+                <Text style={[ss.ormDelta, {
+                  color: deltaORM >= 0 ? theme.brand : theme.danger,
+                }]}>
+                  {deltaORM >= 0 ? '+' : ''}{deltaORM} kg depuis {oneRM[0].label}
+                </Text>
+              )}
+              <Text style={[ss.sectionSub, { color: theme.textMuted, marginTop: 6 }]}>
+                RECORD ESTIMÉ (1RM)
+              </Text>
+              <OrmMountainChart data={oneRM} />
+
+              {topEx.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={ss.pillScroll}
+                  contentContainerStyle={ss.pillContent}
+                >
+                  {topEx.map(ex => {
+                    const active = selectedEx === ex;
+                    return (
+                      <Pressable
+                        key={ex}
+                        onPress={() => setSelectedEx(ex)}
+                        style={[ss.pill,
+                          active
+                            ? { borderColor: theme.brand, backgroundColor: theme.surfaceRaised }
+                            : { borderColor: 'transparent', backgroundColor: 'transparent' },
+                        ]}
+                      >
+                        <Text style={[ss.pillTxt, { color: active ? theme.brand : theme.textMuted }]}>
+                          {ex}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </Animated.View>
+
+            {/* ── Divider ── */}
+            <View style={[ss.divider, { backgroundColor: theme.border }]} />
+
+            {/* ── Activity heatmap ── */}
+            <Animated.View style={[ss.section, sect(4)]}>
+              <Text style={[ss.sectionBig, { color: theme.textPrimary }]}>Activité</Text>
+              <Text style={[ss.sectionSub, { color: theme.textMuted }]}>RÉGULARITÉ — 13 DERNIÈRES SEMAINES</Text>
+              <ActivityDots volumes={dayVols} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 }}>
+                <Text style={{ color: theme.textMuted, fontSize: 10 }}>Moins</Text>
+                {['#1C1C1C', 'rgba(200,241,53,0.20)', 'rgba(200,241,53,0.42)', 'rgba(200,241,53,0.72)'].map((c, i) => (
+                  <View key={i} style={{ width: DOT_SIZE, height: DOT_SIZE, borderRadius: 2, backgroundColor: c }} />
+                ))}
+                <Text style={{ color: theme.textMuted, fontSize: 10 }}>Plus</Text>
+              </View>
+
+            </Animated.View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -744,91 +832,45 @@ export default function ProfileScreen() {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const ss = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-  scroll: {},
-  section: { paddingHorizontal: SECTION_PAD, marginTop: 28 },
-  sectionLabel: {
-    color: TEXT_MUTED, fontSize: 11, fontWeight: '700',
-    letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 14,
+  root: { flex: 1 },
+  section: { paddingHorizontal: SECTION_PAD, marginTop: 20 },
+  pantinWrapper: { paddingHorizontal: SECTION_PAD, marginTop: 14 },
+  divider: { height: 1, marginHorizontal: SECTION_PAD, marginTop: 28, marginBottom: 4, opacity: 0.6 },
+
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  headerName: { fontFamily: 'Anton_400Regular', fontSize: 46, letterSpacing: -1, textTransform: 'uppercase' },
+  settingsIcon: { fontSize: 20, paddingTop: 4 },
+
+  tabBar: { flexDirection: 'row', gap: 8, marginTop: 20 },
+  tabBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  tabLabel: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
+
+  sectionBig: { fontWeight: '700', fontSize: 18, letterSpacing: -0.3 },
+  recoveryBig: { fontFamily: 'Anton_400Regular', fontSize: 36, letterSpacing: -1, textTransform: 'uppercase' },
+  sectionSub: {
+    fontSize: 10, fontWeight: '700',
+    letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2,
   },
 
-  // Header
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: 'rgba(200,241,53,0.1)',
-    borderWidth: 2, borderColor: BRAND,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarTxt: { color: BRAND, fontWeight: '900', fontSize: 20 },
-  headerName: { color: '#fff', fontWeight: '700', fontSize: 20, letterSpacing: -0.4 },
-  headerSub: { color: TEXT_SEC, fontSize: 13, marginTop: 2 },
-  settingsBtn: { padding: 6 },
+  ormBig: { fontFamily: 'Anton_400Regular', fontSize: 52, letterSpacing: -1 },
+  ormDelta: { fontSize: 12, fontWeight: '600', marginTop: 6 },
 
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    marginTop: 20, paddingVertical: 16,
-    borderTopWidth: 0.5, borderBottomWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { color: '#fff', fontWeight: '700', fontSize: 22, letterSpacing: -0.5 },
-  statLabel: { color: TEXT_MUTED, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, marginTop: 3 },
-  vSep: { width: 0.5, height: 28, backgroundColor: '#2A2A2A' },
-
-  // Cards
-  card: { backgroundColor: SURFACE, borderRadius: 16, padding: CARD_PAD },
-  cardPremium: { backgroundColor: SURFACE, borderRadius: 20, padding: ORM_CARD_PAD },
-
-  // 1RM premium header
-  ormValue: {
-    color: '#FFFFFF', fontWeight: '900', fontSize: 40,
-    letterSpacing: -1.5, lineHeight: 44,
-  },
-  ormDelta: { color: BRAND, fontSize: 13, fontWeight: '600', marginTop: 2 },
-
-  // Exercise pills
-  pillScroll: { marginHorizontal: -SECTION_PAD, marginBottom: 12 },
+  pillScroll: { marginTop: 14, marginHorizontal: -SECTION_PAD },
   pillContent: { paddingHorizontal: SECTION_PAD, gap: 8 },
   pill: {
-    height: 30, borderRadius: 99, paddingHorizontal: 14,
-    borderWidth: 1, borderColor: 'rgba(200,241,53,0.15)',
-    alignItems: 'center', justifyContent: 'center',
+    height: 28, borderRadius: 99, paddingHorizontal: 12,
+    borderWidth: 1, alignItems: 'center', justifyContent: 'center',
   },
-  pillActive: { backgroundColor: BRAND, borderColor: BRAND },
-  pillTxt: { color: TEXT_MUTED, fontSize: 12, fontWeight: '600' },
-  pillTxtActive: { color: BG, fontWeight: '700' },
+  pillTxt: { fontSize: 12, fontWeight: '600' },
 
-  // Activity
-  gridStat: { color: TEXT_MUTED, fontSize: 12 },
-
-  // PPL tiles
-  pplTile: { backgroundColor: SURFACE, borderRadius: 12, padding: 12 },
-  pplLabel: { color: TEXT_MUTED, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
-  pplPercent: { color: BRAND, fontWeight: '900', fontSize: 26, marginTop: 4, letterSpacing: -1 },
-  pplMain: { color: TEXT_SEC, fontSize: 12, marginTop: 6 },
-  pplMuscle: { color: TEXT_DIM, fontSize: 11, marginTop: 2 },
-
-  // Weight
-  addWeightBtn: {
-    marginTop: 10, alignSelf: 'center',
-    paddingVertical: 8, paddingHorizontal: 20,
-    borderRadius: 99, borderWidth: 1,
-    borderColor: 'rgba(200,241,53,0.2)',
-  },
-  addWeightTxt: { color: TEXT_MUTED, fontSize: 12, fontWeight: '600' },
-
-  // Settings modal
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 0.5,
   },
-  modalTitle: { color: '#fff', fontWeight: '700', fontSize: 17 },
+  modalTitle: { fontWeight: '700', fontSize: 17 },
   settingsRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: SURFACE, borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 14, marginBottom: 1,
+    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 1,
   },
-  settingsRowLabel: { color: '#fff', fontSize: 15 },
+  settingsRowLabel: { fontSize: 15 },
 });

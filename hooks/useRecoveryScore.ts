@@ -1,4 +1,4 @@
-import { useMuscleRecovery, MUSCLE_RED, MUSCLE_ORANGE, MuscleColors } from './useMuscleRecovery';
+import { useMuscleRecovery, MUSCLE_RED, MUSCLE_ORANGE, MUSCLE_YELLOW, MuscleColors } from './useMuscleRecovery';
 
 export interface RecoveryScore {
   score: number;
@@ -8,10 +8,11 @@ export interface RecoveryScore {
 
 function computeScore(colors: MuscleColors): number {
   const muscles = Object.values(colors);
-  if (muscles.length === 0) return 95;
-  const red = muscles.filter((c) => c === MUSCLE_RED).length;
-  const orange = muscles.filter((c) => c === MUSCLE_ORANGE).length;
-  return Math.max(30, Math.round(95 - red * 8 - orange * 4));
+  if (muscles.length === 0) return 100;
+  const red    = muscles.filter(c => c === MUSCLE_RED).length;
+  const orange = muscles.filter(c => c === MUSCLE_ORANGE).length;
+  const yellow = muscles.filter(c => c === MUSCLE_YELLOW).length;
+  return Math.max(30, Math.round(100 - red * 8 - orange * 4 - yellow * 1));
 }
 
 function getMessage(score: number): string {

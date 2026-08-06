@@ -6,9 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, IconName } from '@/components/Icon';
-
-const BRAND = '#C8F135';
-const INACTIVE = '#555555';
+import { useTheme } from '@/lib/theme';
 
 const TAB_CONFIG: { name: string; label: string; icon: IconName }[] = [
   { name: 'seance',   label: 'Séance',     icon: 'barbell' },
@@ -19,6 +17,7 @@ const TAB_CONFIG: { name: string; label: string; icon: IconName }[] = [
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { theme, mode } = useTheme();
   const visibleRoutes = state.routes.filter((r) => r.name !== 'index');
   const activeIndex = visibleRoutes.findIndex((r) => r === state.routes[state.index]);
 
@@ -55,21 +54,21 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <View style={ss.wrapper} pointerEvents="box-none">
       <LinearGradient
-        colors={['transparent', '#0D1108']}
+        colors={['transparent', theme.bg]}
         pointerEvents="none"
         style={ss.fadeGradient}
       />
       <BlurView
         intensity={80}
-        tint="dark"
+        tint={mode === 'dark' ? 'dark' : 'light'}
         style={[ss.container, { paddingBottom: insets.bottom || 16 }]}
       >
-        <View style={ss.overlay} />
-        <View style={ss.topBorder} />
+        <View style={[ss.overlay, { backgroundColor: theme.navBg }]} />
+        <View style={[ss.topBorder, { backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)' }]} />
         <View style={ss.tabs}>
           {TAB_CONFIG.map((tab, index) => {
             const isActive = index === activeIndex;
-            const color = isActive ? BRAND : INACTIVE;
+            const color = isActive ? theme.brand : theme.textMuted;
             return (
               <Pressable
                 key={tab.name}
@@ -90,12 +89,13 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 export default function TabsLayout() {
+  const { theme } = useTheme();
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        sceneStyle: { backgroundColor: '#0D1108' },
+        sceneStyle: { backgroundColor: theme.bg },
         animation: 'none',
       }}
     >

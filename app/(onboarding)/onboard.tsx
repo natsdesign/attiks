@@ -12,12 +12,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import RevenueCatUI from 'react-native-purchases-ui';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { usePostHog } from 'posthog-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { MuscleMap } from '@/components/MuscleMap';
@@ -34,27 +34,9 @@ type Structure = 'ppl' | 'full_body' | 'haut_bas' | 'je_sais_pas';
 const BRAND = '#C8F135';
 const BG = '#0D1108';
 const CARD_BG = 'rgba(22,29,15,0.85)';
-const TEXT_MUTED = '#59644c';
+const TEXT_MUTED = '#888888';
 const CARD_BORDER = 'rgba(200,241,53,0.22)';
 const CTA_BORDER  = 'rgba(200,241,53,0.45)';
-
-const TESTIMONIALS = [
-  {
-    name: 'Thomas R.',
-    meta: '24 ans · Lyon',
-    text: '"En 3 mois j\'ai pris 6 kg de masse sèche. Le programme est parfaitement calibré pour moi."',
-  },
-  {
-    name: 'Mathieu K.',
-    meta: '31 ans · Paris',
-    text: '"Mon bench est passé de 60 à 100 kg en 6 mois. Le tracker change vraiment tout."',
-  },
-  {
-    name: 'Sébastien M.',
-    meta: '19 ans · Bordeaux',
-    text: '"J\'ai arrêté de faire n\'importe quoi en salle. La progression est réelle et mesurable."',
-  },
-];
 
 const STEP_PROGRESS: Record<number, number> = {
   2: 0.11, 3: 0.22, 4: 0.33, 5: 0.44, 6: 0.55,
@@ -74,15 +56,40 @@ const DEMO_MUSCLE_COLORS: MuscleColors = {
   'delt-left': MUSCLE_ORANGE,
 };
 
-const MOCK_ATHLETES = ['Chris Hemsworth', 'David Laid', 'Jeff Nippard', 'Ryan Terry', 'Steve Cook'];
+const GEN_STEPS = [
+  'Analyse de ton profil...',
+  'Calibrage des charges...',
+  'Construction du split...',
+  'Programme prêt !',
+];
 
-// Simulation de blur gaussien par 5 cercles concentriques — approxime filter:blur(150px)
+const PREVIEW_EXERCISES: Record<Structure, string[]> = {
+  ppl: ['Développé couché barre', 'Écarté haltères', 'Dips'],
+  full_body: ['Squat', 'Développé couché barre', 'Rowing'],
+  haut_bas: ['Développé couché barre', 'Tirage Vertical', 'Élévation latérale'],
+  je_sais_pas: ['Squat', 'Développé couché barre', 'Rowing'],
+};
+
+// Pas de barre/haltères à la maison — on garde le même trio, quelle que soit la structure choisie.
+const HOME_EXERCISES = ['Pompe', 'Fentes en marche', 'Dips'];
+
+function previewExercisesFor(structure: Structure | null, equipment: Equipment | null): string[] {
+  if (equipment === 'domicile') return HOME_EXERCISES;
+  return PREVIEW_EXERCISES[structure ?? 'je_sais_pas'];
+}
 
 export default function OnboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const posthog = usePostHog();
 
   const [step, setStep] = useState(0);
+
+  // Suivi générique par numéro d'étape : indépendant du contenu de l'écran,
+  // donc pas besoin d'y toucher quand on modifie/réordonne le design d'une étape.
+  useEffect(() => {
+    posthog?.capture('onboarding_step_viewed', { step, step_label: STEP_NUM[step] ?? null });
+  }, [step]);
 
   // ── Form state ───────────────────────────────────────────────
   const [firstName, setFirstName] = useState('');
@@ -99,7 +106,6 @@ export default function OnboardScreen() {
   const [daysPerWeek, setDaysPerWeek] = useState<number | null>(null);
   const [structure, setStructure] = useState<Structure | null>(null);
   const [equipment, setEquipment] = useState<Equipment | null>(null);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   // ── Animation refs ───────────────────────────────────────────
   const mainProgress = useRef(new Animated.Value(0)).current;
@@ -107,20 +113,10 @@ export default function OnboardScreen() {
   const welcomeScale = useRef(new Animated.Value(1.1)).current;
   const welcomeSlide = useRef(new Animated.Value(20)).current;
   const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scoreTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [displayScore, setDisplayScore] = useState(0);
-  const [score] = useState(() => Math.floor(Math.random() * 16) + 78);
-  const [mockAthlete] = useState(() => MOCK_ATHLETES[Math.floor(Math.random() * MOCK_ATHLETES.length)]);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [physiqueScore, setPhysiqueScore] = useState<{
-    score: number;
-    athlete: string;
-    athlete_description: string;
-    strengths: string[];
-    improvements: string[];
-    body_type: string;
-    potential: string;
-  } | null>(null);
+  const genTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [genStepIndex, setGenStepIndex] = useState(0);
+  const [paywallPending, setPaywallPending] = useState(false);
+  const [exerciseGifs, setExerciseGifs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (step === 6) setHasCharges(null);
@@ -171,17 +167,50 @@ export default function OnboardScreen() {
   }, [step]);
 
   useEffect(() => {
+    if (step !== 11) return;
+    setGenStepIndex(0);
+    let i = 0;
+    const tick = () => {
+      i += 1;
+      setGenStepIndex(i);
+      if (i < GEN_STEPS.length) {
+        genTimerRef.current = setTimeout(tick, 700);
+      } else {
+        genTimerRef.current = setTimeout(() => next(), 600);
+      }
+    };
+    genTimerRef.current = setTimeout(tick, 700);
+    return () => { if (genTimerRef.current) clearTimeout(genTimerRef.current); };
+  }, [step]);
+
+  useEffect(() => {
     if (step !== 12) return;
-    setDisplayScore(0);
-    let current = 0;
-    const target = physiqueScore?.score ?? score;
-    const increment = target / 60;
-    scoreTimerRef.current = setInterval(() => {
-      current = Math.min(current + increment, target);
-      setDisplayScore(Math.round(current));
-      if (current >= target && scoreTimerRef.current) clearInterval(scoreTimerRef.current);
-    }, 33);
-    return () => { if (scoreTimerRef.current) clearInterval(scoreTimerRef.current); };
+    const terms = previewExercisesFor(structure, equipment);
+    Promise.all(
+      terms.map((term) =>
+        supabase
+          .from('exercises_library')
+          .select('gif_url')
+          .ilike('name_fr', `%${term}%`)
+          .not('gif_url', 'is', null)
+          .limit(1)
+          .maybeSingle()
+          .then(({ data }) => [term, data?.gif_url as string | undefined] as const)
+      )
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      for (const [term, url] of results) if (url) map[term] = url;
+      setExerciseGifs(map);
+    });
+  }, [step, structure, equipment]);
+
+  useEffect(() => {
+    if (step !== 13) return;
+    setPaywallPending(true);
+    RevenueCatUI.presentPaywall().finally(() => {
+      setPaywallPending(false);
+      finish();
+    });
   }, [step]);
 
   const next = () => setStep(s => s + 1);
@@ -193,45 +222,9 @@ export default function OnboardScreen() {
   const firstNameValid = firstName.trim().length >= 2;
   const measurementsValid = parseFloat(heightCm) > 100 && parseFloat(weightKg) > 20;
 
-  async function pickPhoto() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
-  }
-
-  async function analyzePhysique(imageUri: string) {
-    setAnalyzing(true);
-    try {
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const { data, error } = await supabase.functions.invoke('analyze-physique', {
-        body: {
-          imageBase64: base64,
-          imageMediaType: 'image/jpeg',
-          userProfile: { level, goal, age, weight: weightKg, height: heightCm },
-        },
-      });
-      if (error) throw error;
-      setPhysiqueScore(data);
-    } catch {
-      setPhysiqueScore({
-        score: 75,
-        athlete: 'Jeff Nippard',
-        athlete_description: 'Bodybuilder naturel et coach reconnu mondialement',
-        strengths: ['Bonne base morphologique', 'Potentiel de progression élevé'],
-        improvements: ['Continuer la surcharge progressive', 'Optimiser la récupération'],
-        body_type: 'mésomorphe',
-        potential: 'Excellent potentiel avec une progression structurée',
-      });
-    } finally {
-      setAnalyzing(false);
-      next();
-    }
-  }
 
   async function finish() {
+    posthog?.capture('onboarding_completed', { goal, level, equipment, structure, days_per_week: daysPerWeek });
     await AsyncStorage.setItem('attiks_onboard_v1', 'done');
     if (user) {
       const name = firstName.trim() || null;
@@ -271,7 +264,11 @@ export default function OnboardScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
             <View style={{ flex: 1, justifyContent: 'center' }}>
-              <LogoAttiks width={49} height={40} style={{ marginBottom: 40 }} />
+              <Image
+                source={require('../../assets/attiks-mascot.webp')}
+                style={{ width: 190, height: 190, alignSelf: 'center', marginBottom: 24 }}
+                resizeMode="contain"
+              />
               <Text style={{
                 color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
                 letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 10,
@@ -449,7 +446,7 @@ export default function OnboardScreen() {
               padding: 20,
               marginBottom: 20,
             }}>
-              <MuscleMap muscleColors={DEMO_MUSCLE_COLORS} compact />
+              <MuscleMap muscleColors={DEMO_MUSCLE_COLORS} height={155} />
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 16 }}>
                 {([
                   [MUSCLE_RED, 'Fatigué'],
@@ -502,77 +499,107 @@ export default function OnboardScreen() {
     );
   }
 
-  // ── Écran 13 — Révélation score (Wrapped) ────────────────────
+  // ── Écran 13 — Programme prêt (hook pré-paywall) ─────────────
   if (step === 12) {
-    const target = physiqueScore?.score ?? score;
-    const revealed = displayScore >= target;
-    const athleteName = physiqueScore?.athlete ?? mockAthlete;
-    const potential = physiqueScore?.potential ?? (
-      target >= 90 ? `Physique d'élite — Top 5% des utilisateurs.` :
-      target >= 85 ? `Excellent potentiel — Proche de ${mockAthlete}.` :
-                    `Bon potentiel — Programme optimisé pour toi.`
-    );
+    const struct = structure ?? 'je_sais_pas';
+    const exercises = previewExercisesFor(structure, equipment);
+    const structLabel = equipment === 'domicile'
+      ? 'poids du corps'
+      : {
+          ppl: 'Push / Pull / Legs',
+          full_body: 'Full Body',
+          haut_bas: 'Haut / Bas du corps',
+          je_sais_pas: 'sur mesure',
+        }[struct];
+    const hook = goal === 'masse' ? 'Prêt à prendre de la masse ?'
+      : goal === 'force' ? 'Prêt à devenir plus fort ?'
+      : 'Prêt à progresser vraiment ?';
+
     return (
       <View style={{ flex: 1, backgroundColor: BG }}>
-        <GradientOrb />
-        <SafeAreaView style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 40, paddingBottom: 40, alignItems: 'center' }}
+            contentContainerStyle={{ paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center', marginBottom: 24 }}>
-              Ton score physique
-            </Text>
-            <Text style={{ color: BRAND, fontWeight: '900', fontSize: 108, lineHeight: 116, textAlign: 'center' }}>
-              {displayScore}
-            </Text>
-            <Text style={{ color: TEXT_MUTED, fontSize: 18, textAlign: 'center', marginBottom: 20 }}>/ 100</Text>
+            <View style={{ height: 260 }}>
+              <Image
+                source={require('../../assets/attiks-gym.png')}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+              <LinearGradient
+                colors={['transparent', BG]}
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120 }}
+              />
+            </View>
 
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15, textAlign: 'center', marginBottom: 4, lineHeight: 22 }}>
-              {revealed ? potential : '...'}
+            <View style={{ paddingHorizontal: 28, paddingTop: 8 }}>
+            <Text style={{ color: BRAND, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center', marginBottom: 16 }}>
+              Ton programme est prêt
+            </Text>
+            <Text style={{
+              color: '#fff', fontWeight: '900', fontSize: 34, lineHeight: 36, textAlign: 'center',
+              letterSpacing: -1, textTransform: 'uppercase', marginBottom: 10,
+            }}>
+              {hook}
+            </Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 32 }}>
+              Split {structLabel} calibré sur tes réponses.{'\n'}Voici un aperçu de ta séance 1 :
             </Text>
 
-            {revealed && physiqueScore && (
-              <Text style={{ color: BRAND, fontSize: 13, textAlign: 'center', marginBottom: 28 }}>
-                Morphologie proche de {athleteName}
-              </Text>
-            )}
-
-            {revealed && physiqueScore && (
-              <View style={{ width: '100%', gap: 10, marginBottom: 32 }}>
-                {physiqueScore.strengths.map((s) => (
-                  <View key={s} style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 10,
-                    backgroundColor: 'rgba(200,241,53,0.06)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
-                    borderWidth: 1, borderColor: 'rgba(200,241,53,0.15)',
+            <View style={{
+              backgroundColor: CARD_BG, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(200,241,53,0.18)',
+              padding: 18, marginBottom: 16,
+            }}>
+              {exercises.map((ex, i) => {
+                const gif = exerciseGifs[ex];
+                return (
+                  <View key={ex} style={{
+                    flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
+                    borderBottomWidth: i < exercises.length - 1 ? 0.5 : 0, borderBottomColor: 'rgba(200,241,53,0.1)',
                   }}>
-                    <Text style={{ color: BRAND, fontSize: 14 }}>✓</Text>
-                    <Text style={{ color: '#ccc', fontSize: 13, flex: 1 }}>{s}</Text>
+                    {gif ? (
+                      <Image
+                        source={{ uri: gif }}
+                        style={{ width: 40, height: 40, borderRadius: 10, marginRight: 12, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={{
+                        width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(200,241,53,0.12)',
+                        alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                      }}>
+                        <Text style={{ color: BRAND, fontWeight: '900', fontSize: 12 }}>{i + 1}</Text>
+                      </View>
+                    )}
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 }}>{ex}</Text>
                   </View>
-                ))}
-                {physiqueScore.improvements.map((s) => (
-                  <View key={s} style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 10,
-                    backgroundColor: CARD_BG, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
-                    borderWidth: 1, borderColor: 'rgba(200,241,53,0.1)',
-                  }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>↑</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 13, flex: 1 }}>{s}</Text>
-                  </View>
-                ))}
+                );
+              })}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', paddingTop: 12, marginTop: 4,
+                borderTopWidth: 0.5, borderTopColor: 'rgba(200,241,53,0.1)',
+              }}>
+                <Text style={{ fontSize: 15, marginRight: 10 }}>🔒</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 13, fontStyle: 'italic' }}>
+                  + toutes les séances de ton programme complet
+                </Text>
               </View>
-            )}
+            </View>
 
-            {!physiqueScore && revealed && (
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginBottom: 32, lineHeight: 18 }}>
-                Basé sur ton profil, ton niveau{'\n'}et tes objectifs déclarés.
+            <View style={{
+              backgroundColor: 'rgba(200,241,53,0.06)', borderRadius: 14, borderWidth: 1,
+              borderColor: 'rgba(200,241,53,0.15)', padding: 14, marginBottom: 36,
+            }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 13, lineHeight: 18 }}>
+                💡 Attiks ajuste automatiquement tes charges et tes exercices à chaque séance selon ta récupération.
               </Text>
-            )}
+            </View>
 
             <Pressable
               onPress={next}
               style={{
-                width: '100%',
                 backgroundColor: 'rgba(200,241,53,0.4)',
                 borderWidth: 1,
                 borderColor: CTA_BORDER,
@@ -582,110 +609,21 @@ export default function OnboardScreen() {
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Continuer →</Text>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Débloquer mon programme →</Text>
             </Pressable>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </View>
     );
   }
 
-  // ── Écran 14 — Social proof + Paywall ────────────────────────
+  // ── Écran 14 — Paywall RevenueCat (natif, designé sur le dashboard) ──
   if (step === 13) {
     return (
-      <View style={{ flex: 1, backgroundColor: BG }}>
+      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
         <GradientOrb />
-        <SafeAreaView style={{ flex: 1, paddingBottom: 0 }}>
-          <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 36, paddingBottom: 8 }}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={{ color: BRAND, fontWeight: '900', fontSize: 80, textAlign: 'center', lineHeight: 86 }}>7</Text>
-            <Text style={{ color: TEXT_MUTED, fontSize: 15, textAlign: 'center', marginBottom: 20 }}>jours d'essai gratuit</Text>
-            <Text style={{
-              color: '#fff', fontWeight: '900', fontSize: 32, textAlign: 'center', lineHeight: 34,
-              letterSpacing: -1, textTransform: 'uppercase', marginBottom: 8,
-            }}>
-              Rejoins les athlètes{'\n'}qui progressent vraiment.
-            </Text>
-            <Text style={{ color: TEXT_MUTED, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-              Puis 9,99 €/mois ou 59,99 €/an{'\n'}Annulable à tout moment.
-            </Text>
-
-            {([
-              ['📊', 'Programme personnalisé', 'PPL, Full Body ou Haut/Bas — adapté à toi'],
-              ['⏱️', 'Tracker complet', 'Temps de repos, PRs automatiques, historique'],
-              ['🧠', 'Récupération intelligente', 'Le pantin musculaire te dit quand pousser'],
-              ['🏆', 'Carte de partage', 'Montre tes gains — viralité garantie'],
-            ] as [string, string, string][]).map(([icon, title, sub]) => (
-              <View key={title} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 }}>
-                <View style={{
-                  width: 40, height: 40, borderRadius: 12,
-                  backgroundColor: 'rgba(200,241,53,0.1)',
-                  borderWidth: 1, borderColor: 'rgba(200,241,53,0.18)',
-                  alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2,
-                }}>
-                  <Text style={{ fontSize: 18 }}>{icon}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{title}</Text>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 2, lineHeight: 17 }}>{sub}</Text>
-                </View>
-              </View>
-            ))}
-
-            <View style={{ gap: 10, marginTop: 8, marginBottom: 12 }}>
-              {TESTIMONIALS.map((t) => (
-                <View key={t.name} style={{
-                  backgroundColor: CARD_BG,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: 'rgba(200,241,53,0.15)',
-                  padding: 14,
-                }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <View style={{
-                      width: 32, height: 32, borderRadius: 16,
-                      backgroundColor: 'rgba(200,241,53,0.12)',
-                      alignItems: 'center', justifyContent: 'center', marginRight: 10,
-                    }}>
-                      <Text style={{ color: BRAND, fontWeight: '900', fontSize: 12 }}>{t.name[0]}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>{t.name}</Text>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>{t.meta}</Text>
-                    </View>
-                    <Text style={{ color: BRAND, fontSize: 11 }}>★★★★★</Text>
-                  </View>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12, lineHeight: 17, fontStyle: 'italic' }}>{t.text}</Text>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-
-          <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
-            <Pressable
-              onPress={finish}
-              style={{
-                backgroundColor: 'rgba(200,241,53,0.4)',
-                borderWidth: 1,
-                borderColor: CTA_BORDER,
-                borderRadius: 40,
-                height: 60,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Commencer l'essai gratuit</Text>
-            </Pressable>
-            <Pressable
-              onPress={finish}
-              style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>Continuer sans abonnement</Text>
-            </Pressable>
-          </View>
-        </SafeAreaView>
+        {paywallPending && <ActivityIndicator color={BRAND} size="large" />}
       </View>
     );
   }
@@ -1167,80 +1105,32 @@ export default function OnboardScreen() {
         </ScrollView>
       );
 
-      // ── Étape 12 — Upload photo ─────────────────────────────
+      // ── Étape 12 — Génération du programme ──────────────────
       case 11: return (
-        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}>
-          <LogoAttiks width={40} height={32} style={{ marginBottom: 20 }} />
-          <Text style={{
-            color: '#fff', fontWeight: '900', fontSize: 44, lineHeight: 42,
-            letterSpacing: -1.5, textTransform: 'uppercase', marginBottom: 8,
-          }}>
-            Ton score{'\n'}physique.
-          </Text>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, lineHeight: 20, marginBottom: 28 }}>
-            Ajoute une photo de ton physique actuel. Notre IA analyse ta morphologie et te révèle à quel athlète tu ressembles.
-          </Text>
-
-          <Pressable
-            onPress={pickPhoto}
-            style={{
-              backgroundColor: CARD_BG,
-              borderWidth: 1,
-              borderColor: 'rgba(200,241,53,0.25)',
-              borderRadius: 20,
-              height: 220,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 16,
-              overflow: 'hidden',
-            }}
-          >
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-            ) : (
-              <View style={{ alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 52, opacity: 0.15 }}>🧍</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Appuie pour ajouter une photo</Text>
-                <Text style={{ color: 'rgba(200,241,53,0.15)', fontSize: 12, textAlign: 'center', paddingHorizontal: 32, lineHeight: 17 }}>
-                  Photo de dos ou de face,{'\n'}corps entier de préférence
-                </Text>
-              </View>
-            )}
-          </Pressable>
-
-          {photoUri && (
-            <Pressable onPress={pickPhoto} style={{ marginBottom: 16, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Changer la photo</Text>
-            </Pressable>
-          )}
-
-          <Pressable
-            onPress={photoUri ? () => analyzePhysique(photoUri) : next}
-            disabled={analyzing}
-            style={{
-              height: 60,
-              borderRadius: 40,
-              backgroundColor: photoUri ? 'rgba(200,241,53,0.4)' : 'rgba(200,241,53,0.06)',
-              borderWidth: 1,
-              borderColor: photoUri ? CTA_BORDER : 'rgba(200,241,53,0.12)',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 12,
-              flexDirection: 'row',
-              gap: 10,
-            }}
-          >
-            {analyzing && <ActivityIndicator size="small" color={BRAND} />}
-            <Text style={{ fontWeight: '900', fontSize: 16, color: photoUri ? '#fff' : TEXT_MUTED }}>
-              {analyzing ? 'Analyse en cours...' : photoUri ? 'Calculer mon score →' : 'Continuer sans photo'}
-            </Text>
-          </Pressable>
-          {!analyzing && (
-            <Pressable onPress={next} style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>Passer cette étape</Text>
-            </Pressable>
-          )}
-        </ScrollView>
+        <View style={{ flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' }}>
+          <LogoAttiks width={44} height={36} style={{ marginBottom: 32 }} />
+          <ActivityIndicator color={BRAND} size="large" style={{ marginBottom: 28 }} />
+          <View style={{ gap: 14, alignItems: 'flex-start' }}>
+            {GEN_STEPS.map((label, i) => {
+              const done = i < genStepIndex;
+              const active = i === genStepIndex;
+              if (i > genStepIndex) return null;
+              return (
+                <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={{ color: done ? BRAND : TEXT_MUTED, fontSize: 16 }}>
+                    {done ? '✓' : active ? '…' : ''}
+                  </Text>
+                  <Text style={{
+                    color: done ? '#fff' : TEXT_MUTED, fontSize: 15,
+                    fontWeight: done ? '700' : '500',
+                  }}>
+                    {label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
       );
 
       default: return null;

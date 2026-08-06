@@ -2,6 +2,7 @@ import '../global.css';
 import { useEffect, useState } from 'react';
 import { Dimensions, LogBox, View } from 'react-native';
 import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
+import { ThemeContext, themes, ThemeMode } from '@/lib/theme';
 
 LogBox.ignoreLogs([
   'expo-notifications: Android Push notifications',
@@ -10,8 +11,10 @@ LogBox.ignoreLogs([
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import { PostHogProvider } from 'posthog-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initPurchases } from '@/lib/purchases';
 
 const SW = Dimensions.get('window').width;
 
@@ -41,12 +44,23 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+  // Mode clair désactivé pour l'instant (chantier en pause) — l'app reste 100% sombre.
+  const themeMode: ThemeMode = 'dark';
 
   useEffect(() => {
     AsyncStorage.getItem('attiks_onboard_v1').then((v) => {
       setOnboardingDone(v === 'done');
     });
   }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      initPurchases(session.user.id);
+    }
+  }, [session?.user?.id]);
+
+  // No-op tant que le mode clair est désactivé (garde le contrat de ThemeContext).
+  const toggleTheme = async () => {};
 
   useEffect(() => {
     if (loading || onboardingDone === null) return;
@@ -73,23 +87,33 @@ export default function RootLayout() {
     }
   }, [session, loading, segments, onboardingDone]);
 
+  const theme = themes[themeMode];
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#0D1108' }}>
-      <StatusBar style="light" />
-      <BottomGlow />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="session/active"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen
-          name="session/[id]"
-          options={{ headerShown: true, headerTitle: 'Détail séance', headerStyle: { backgroundColor: '#0D1108' }, headerTintColor: '#fff' }}
-        />
-      </Stack>
-    </View>
+    <PostHogProvider
+      apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY}
+      autocapture={false}
+      options={{ host: process.env.EXPO_PUBLIC_POSTHOG_HOST }}
+    >
+      <ThemeContext.Provider value={{ mode: themeMode, theme, toggleTheme }}>
+        <View style={{ flex: 1, backgroundColor: theme.bg }}>
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
+          <BottomGlow />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.bg } }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(onboarding)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="session/active"
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen
+              name="session/[id]"
+              options={{ headerShown: true, headerTitle: 'Détail séance', headerStyle: { backgroundColor: theme.bg }, headerTintColor: theme.textPrimary }}
+            />
+          </Stack>
+        </View>
+      </ThemeContext.Provider>
+    </PostHogProvider>
   );
 }

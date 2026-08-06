@@ -39,7 +39,7 @@ export default function LoginScreen() {
           <TextInput
             className="bg-surface-raised border border-surface-border rounded-2xl px-4 h-14 text-text-primary text-base"
             placeholder="Email"
-            placeholderTextColor="#444"
+            placeholderTextColor="#888888"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -49,7 +49,7 @@ export default function LoginScreen() {
           <TextInput
             className="bg-surface-raised border border-surface-border rounded-2xl px-4 h-14 text-text-primary text-base"
             placeholder="Mot de passe"
-            placeholderTextColor="#444"
+            placeholderTextColor="#888888"
             value={password}
             onChangeText={setPassword}
             secureTextEntry

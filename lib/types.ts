@@ -17,6 +17,37 @@ export interface Program {
   created_at: string;
 }
 
+export interface ProgramTemplateExercise {
+  name: string;
+  muscle_group: string;
+  order_index: number;
+  sets_reps_hint?: string;
+}
+
+export interface ProgramTemplate {
+  id: string;
+  slug: string;
+  name: string;
+  subtitle: string;
+  goal: string;
+  level: 'debutant' | 'intermediaire' | 'avance';
+  type: SessionType;
+  ppl_block: PplBlock;
+  cover_image_url: string | null;
+  accent_color: string;
+  exercises: ProgramTemplateExercise[];
+  sort_order: number;
+}
+
+export interface CustomExercise {
+  id: string;
+  user_id: string;
+  name: string;
+  muscle_group: string;
+  equipment: string | null;
+  created_at: string;
+}
+
 export interface Session {
   id: string;
   user_id: string;
