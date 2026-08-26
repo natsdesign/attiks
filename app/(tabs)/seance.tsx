@@ -1,72 +1,78 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated, Easing, Pressable, ScrollView,
+  Animated, Easing, PanResponder, Pressable, ScrollView,
   StyleSheet, Text, View,
 } from 'react-native';
-import Svg, { Line } from 'react-native-svg';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Program } from '@/lib/types';
 import { useRecoveryScore } from '@/hooks/useRecoveryScore';
 import { GradientOrb } from '@/components/GradientOrb';
 import { Icon } from '@/components/Icon';
-import { useTheme } from '@/lib/theme';
+import { Mascot, mascotStateForScore } from '@/components/Mascot';
+import { GlassCard, GlassButton } from '@/components/glass';
+import { useTheme, Theme } from '@/lib/theme';
 
-const ANTON = 'Anton_400Regular';
+const MASCOT_SIZE = 150;
+const RING_SIZE = 174;
+const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
+const SWIPE_THRESHOLD_RATIO = 0.62;
+const HANDLE_SIZE = 39;
 
-// ── Gauge circulaire en pointillés ────────────────────────────────────────────
+// Couleurs reprises telles quelles du fichier Figma (node 346:158) — pas les
+// tokens de lib/theme.ts, qui restent inchangés tant que le reste de l'app
+// n'a pas suivi la même refonte.
+const FIG = {
+  screenBg: '#050C0C',
+  pillBg: '#070E0F',
+  streakChipBg: 'rgba(20,28,26,0.4)',
+  progThumbBg: '#1B261D',
+  badgeBg: '#D2E150',
+  badgeTxt: '#05090C',
+  ctaBorder: '#C8F135',
+  ring: '#C8F135',
+};
 
-const GAUGE_SIZE   = 133;
-const TICK_COUNT   = 44;
-const TICK_R_OUTER = GAUGE_SIZE / 2 - 4;
-const TICK_R_INNER = TICK_R_OUTER - 9;
-const CX           = GAUGE_SIZE / 2;
-const CY           = GAUGE_SIZE / 2;
+// ── Utilitaires date / streak ───────────────────────────────────────────────
 
-function RecoveryGauge({ score }: { score: number }) {
-  const { theme } = useTheme();
-  const activeTicks = Math.round((score / 100) * TICK_COUNT);
-  return (
-    <Svg width={GAUGE_SIZE} height={GAUGE_SIZE}>
-      {Array.from({ length: TICK_COUNT }).map((_, i) => {
-        const angle = (i / TICK_COUNT) * Math.PI * 2 - Math.PI / 2;
-        const x1 = CX + TICK_R_INNER * Math.cos(angle);
-        const y1 = CY + TICK_R_INNER * Math.sin(angle);
-        const x2 = CX + TICK_R_OUTER * Math.cos(angle);
-        const y2 = CY + TICK_R_OUTER * Math.sin(angle);
-        const active = i < activeTicks;
-        return (
-          <Line key={i}
-            x1={x1.toFixed(2)} y1={y1.toFixed(2)}
-            x2={x2.toFixed(2)} y2={y2.toFixed(2)}
-            stroke={active ? theme.brand : theme.border}
-            strokeWidth={2}
-            strokeLinecap="round"
-          />
-        );
-      })}
-    </Svg>
-  );
+function toDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
-// ── Meta pill (durée / exercices) ─────────────────────────────────────────────
-
-function MetaPill({ icon, label, theme }: { icon: 'clock' | 'barbell'; label: string; theme: ReturnType<typeof import('@/lib/theme').useTheme>['theme'] }) {
-  return (
-    <View style={{
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      backgroundColor: theme.brand + '1A', borderRadius: 8,
-      paddingHorizontal: 6, paddingVertical: 3,
-    }}>
-      <Icon name={icon} size={14} color={theme.textSecondary} />
-      <Text style={{ fontFamily: 'Inter', fontSize: 12, color: theme.textSecondary, letterSpacing: -0.36 }}>{label}</Text>
-    </View>
-  );
+function startOfWeekMonday(d: Date): Date {
+  const day = d.getDay(); // 0 = dimanche .. 6 = samedi
+  const diff = (day === 0 ? -6 : 1) - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
 }
 
-// ── Utilitaires ───────────────────────────────────────────────────────────────
+function computeStreak(sessionDateKeys: Set<string>): number {
+  const oneDay = 24 * 60 * 60 * 1000;
+  let cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+
+  if (!sessionDateKeys.has(toDateKey(cursor))) {
+    cursor = new Date(cursor.getTime() - oneDay);
+    if (!sessionDateKeys.has(toDateKey(cursor))) return 0;
+  }
+
+  let streak = 0;
+  while (sessionDateKeys.has(toDateKey(cursor))) {
+    streak += 1;
+    cursor = new Date(cursor.getTime() - oneDay);
+  }
+  return streak;
+}
 
 function formatDuration(exerciseCount: number): string {
   const min = exerciseCount * 12;
@@ -74,11 +80,108 @@ function formatDuration(exerciseCount: number): string {
   return `${min}min`;
 }
 
-function todayLabel(): string {
-  const s = new Date().toLocaleDateString('fr-FR', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function recoveryBadge(score: number, theme: Theme): { label: string; color: string } {
+  if (score >= 85) return { label: 'Excellente', color: FIG.badgeBg };
+  if (score >= 65) return { label: 'Bonne', color: theme.recoveryMid };
+  return { label: 'Fatiguée', color: theme.recoveryFatigued };
+}
+
+// ── CTA swipe — remplace le lien texte "Séance libre" ───────────────────────
+// PanResponder + Animated (RN pur, pas de Reanimated — crash en Expo Go).
+
+// Ressort façon iOS (UIKit spring : damping ratio ~0.86, réponse rapide)
+// plutôt que le `bounciness` par défaut de RN qui rebondit de façon trop
+// mécanique. useNativeDriver: true partout — tout tourne sur le thread UI,
+// aucun à-coup lié au JS.
+const IOS_SPRING = { damping: 22, mass: 0.7, stiffness: 340, useNativeDriver: true } as const;
+
+function SwipeToStart({ label, onComplete }: { label: string; onComplete: () => void }) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const pan = useRef(new Animated.Value(0)).current;
+  const grabScale = useRef(new Animated.Value(1)).current;
+  const maxDragRef = useRef(0);
+
+  const maxDrag = Math.max(1, trackWidth - HANDLE_SIZE - 8);
+  maxDragRef.current = maxDrag;
+
+  const springBack = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(pan, { toValue: 0, ...IOS_SPRING }),
+      Animated.spring(grabScale, { toValue: 1, ...IOS_SPRING }),
+    ]).start();
+  }, [pan, grabScale]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderGrant: () => {
+        Animated.spring(grabScale, { toValue: 1.12, ...IOS_SPRING }).start();
+      },
+      onPanResponderMove: (_, g) => {
+        const x = Math.min(Math.max(g.dx, 0), maxDragRef.current);
+        pan.setValue(x);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx >= maxDragRef.current * SWIPE_THRESHOLD_RATIO) {
+          Animated.parallel([
+            Animated.timing(pan, {
+              toValue: maxDragRef.current, duration: 180,
+              easing: Easing.out(Easing.cubic), useNativeDriver: true,
+            }),
+            Animated.spring(grabScale, { toValue: 1, ...IOS_SPRING }),
+          ]).start(() => {
+            onComplete();
+            pan.setValue(0);
+          });
+        } else {
+          springBack();
+        }
+      },
+      onPanResponderTerminate: springBack,
+    })
+  ).current;
+
+  return (
+    <View style={ss.swipeTrack} onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}>
+      <BlurView intensity={35} tint="light" style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={['rgba(122,196,97,0.5)', 'rgba(215,228,78,0.5)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* reflet verre — lumière diagonale en haut à gauche */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.4)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.7, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <Animated.Text
+        style={[
+          ss.swipeLabel,
+          {
+            opacity: pan.interpolate({ inputRange: [0, maxDrag * 0.7, maxDrag], outputRange: [1, 0.4, 0], extrapolate: 'clamp' }),
+            transform: [{
+              translateX: pan.interpolate({ inputRange: [0, maxDrag], outputRange: [0, 14], extrapolate: 'clamp' }),
+            }],
+          },
+        ]}
+      >
+        {label}
+      </Animated.Text>
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[ss.swipeHandle, { transform: [{ translateX: pan }, { scale: grabScale }] }]}
+      >
+        <Icon name="caretRight" size={13} color="#050C0C" />
+        <View style={{ marginLeft: -9 }}>
+          <Icon name="caretRight" size={13} color="#050C0C" />
+        </View>
+      </Animated.View>
+    </View>
+  );
 }
 
 // ── Écran principal ───────────────────────────────────────────────────────────
@@ -92,15 +195,16 @@ export default function SeanceScreen() {
 
   const [pseudo, setPseudo] = useState('');
   const [programs, setPrograms] = useState<Program[]>([]);
+  const [sessionDateKeys, setSessionDateKeys] = useState<Set<string>>(new Set());
   const todayProgram = programs[0] ?? null;
 
-  // Stagger d'entrée (opacity + translateY)
+  // Fondu d'entrée léger — pas de mise en scène
   const anims = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
   useEffect(() => {
-    Animated.stagger(80, anims.map(a =>
+    Animated.stagger(60, anims.map(a =>
       Animated.timing(a, {
         toValue: 1,
-        duration: 350,
+        duration: 280,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       })
@@ -109,7 +213,7 @@ export default function SeanceScreen() {
 
   const sect = (i: number) => ({
     opacity: anims[i],
-    transform: [{ translateY: anims[i].interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+    transform: [{ translateY: anims[i].interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
   });
 
   useFocusEffect(
@@ -120,102 +224,160 @@ export default function SeanceScreen() {
       supabase.from('programs').select('*').eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .then(({ data }) => setPrograms(data ?? []));
+      supabase.from('sessions').select('date')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(60)
+        .then(({ data }) => {
+          const keys = new Set((data ?? []).map(row => toDateKey(new Date(row.date))));
+          setSessionDateKeys(keys);
+        });
     }, [user])
   );
 
-  const name = (pseudo || 'Athlète').toUpperCase();
+  const name = pseudo || 'Athlète';
+  const initial = name.charAt(0).toUpperCase();
   const exerciseCount = todayProgram?.exercises?.length ?? 0;
+  const streak = computeStreak(sessionDateKeys);
+  const badge = recoveryBadge(score, theme);
 
-  const ss = getStyles(theme);
+  const monday = startOfWeekMonday(new Date());
+  const todayKey = toDateKey(new Date());
+  const weekDays = WEEKDAY_LABELS.map((label, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const key = toDateKey(d);
+    return { key, label, done: sessionDateKeys.has(key), isToday: key === todayKey };
+  });
+
+  const ss2 = getStyles(theme);
 
   return (
-    <SafeAreaView style={ss.root}>
+    <SafeAreaView style={ss2.root}>
       <GradientOrb />
 
       <ScrollView
-        contentContainerStyle={[ss.scroll, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[ss2.scroll, { paddingBottom: 120 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ── 1. HEADER ───────────────────────────────────────────── */}
-        <Animated.View style={[ss.header, sect(0)]}>
-          <Text style={ss.name}>{name}</Text>
-          <Text style={ss.date}>{todayLabel()}</Text>
-        </Animated.View>
-
-        {/* ── 2. RÉCUPÉRATION ─────────────────────────────────────── */}
-        <Animated.View style={[ss.section, sect(1)]}>
-          <View style={ss.card}>
-            <View style={ss.recovLeft}>
-              <View>
-                <Text style={ss.cardLabel}>RÉCUPÉRATION</Text>
-                <Text style={ss.recovScore} numberOfLines={1}>{score}%</Text>
+        {/* ── SEMAINE + STREAK + AVATAR ───────────────────────────────── */}
+        <Animated.View style={[ss2.weekRow, sect(0)]}>
+          <View style={ss2.dayPills}>
+            {weekDays.map((d) => (
+              <View key={d.key} style={[ss2.dayPill, d.isToday && ss2.dayPillToday]}>
+                <Text style={ss2.dayLabel}>{d.label}</Text>
+                <View style={[ss2.dayCheck, d.done && ss2.dayCheckDone]}>
+                  {d.done && <Icon name="check" size={13} color={theme.bg} />}
+                </View>
               </View>
-              <Text style={ss.recovMsg}>{message}</Text>
+            ))}
+          </View>
+          <View style={ss2.headerRight}>
+            <View style={ss2.streakChip}>
+              <Icon name="flame" size={15} color={theme.brand} />
+              <Text style={ss2.streakTxt}>{streak}</Text>
             </View>
-            <View style={ss.gaugeWrap}>
-              <RecoveryGauge score={score} />
+            <View style={ss2.avatarCircle}>
+              <Text style={ss2.avatarInitial}>{initial}</Text>
             </View>
           </View>
         </Animated.View>
 
-        {/* ── 3. PROGRAMME DU JOUR ────────────────────────────────── */}
-        <Animated.View style={[ss.section, sect(2)]}>
-          {todayProgram ? (
-            <View style={[ss.card, ss.cardCol]}>
-              <View style={ss.progInfo}>
-                <View>
-                  <Text style={ss.cardLabel}>PROGRAMME DU JOUR</Text>
-                  <Text style={ss.progName} numberOfLines={1}>
-                    {todayProgram.name.toUpperCase()}
-                  </Text>
-                </View>
-                <View style={ss.pills}>
-                  {exerciseCount > 0 && (
-                    <MetaPill icon="clock" label={formatDuration(exerciseCount)} theme={theme} />
-                  )}
-                  {exerciseCount > 0 && (
-                    <MetaPill icon="barbell" label={String(exerciseCount)} theme={theme} />
-                  )}
-                </View>
-              </View>
-              <Pressable
-                style={ss.ctaBtn}
-                onPress={() =>
-                  router.push({
-                    pathname: '/session/active',
-                    params: { programId: todayProgram.id },
-                  })
-                }
-              >
-                <Text style={ss.ctaTxt}>Commencer la séance</Text>
-              </Pressable>
+        {/* ── CARTE RÉCUPÉRATION ──────────────────────────────────── */}
+        {/* Colonne mascotte à largeur fixe + carte texte en flex:1 — la
+            largeur du texte est garantie par flexbox, jamais grignotée par
+            l'anneau (contrairement à un positionnement absolute qui les
+            faisait se chevaucher). Seul le débordement vertical (marginTop
+            négatif) casse le cadre, sans jamais toucher le texte. */}
+        <Animated.View style={sect(1)}>
+          <View style={ss2.recovRow}>
+            <View style={ss2.mascotCol}>
+              <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
+                <Defs>
+                  <RadialGradient id="ringGlow" cx="50%" cy="50%" r="50%">
+                    <Stop offset="45%" stopColor={FIG.ring} stopOpacity={0} />
+                    <Stop offset="100%" stopColor={FIG.ring} stopOpacity={0.28} />
+                  </RadialGradient>
+                </Defs>
+                {/* halo diffus */}
+                <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_SIZE / 2} fill="url(#ringGlow)" />
+                {/* anneau épais simulé en 3 couches (SVG RN ne fait pas de vrai blur fiable) */}
+                <Circle
+                  cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_SIZE / 2 - 6}
+                  stroke={FIG.ring} strokeWidth={20} fill="none" opacity={0.12}
+                />
+                <Circle
+                  cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_SIZE / 2 - 6}
+                  stroke={FIG.ring} strokeWidth={11} fill="none" opacity={0.3}
+                />
+                <Circle
+                  cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_SIZE / 2 - 6}
+                  stroke={FIG.ring} strokeWidth={4.5} fill="none" opacity={1}
+                />
+              </Svg>
+              <Mascot state={mascotStateForScore(score)} size={MASCOT_SIZE} />
             </View>
-          ) : (
-            <Pressable
-              style={[ss.card, ss.cardCol, { gap: 20 }]}
-              onPress={() => router.push('/(tabs)/programs')}
-            >
-              <View style={ss.progInfo}>
-                <Text style={ss.cardLabel}>PROGRAMME DU JOUR</Text>
-                <Text style={[ss.progName, { color: theme.textMuted }]}>AUCUN</Text>
+            <GlassCard style={ss2.recovCard} contentStyle={ss2.recovCardContent}>
+              <Text style={ss2.recovLabel}>Récupération</Text>
+              <Text style={ss2.recovScore}>{score}%</Text>
+              <View style={[ss2.badge, { backgroundColor: badge.color }]}>
+                <Text style={ss2.badgeTxt}>{badge.label}</Text>
               </View>
-              <Pressable
-                style={[ss.ctaBtn, { backgroundColor: theme.brand, borderWidth: 0, borderRadius: 12, height: 52 }]}
-                onPress={() => router.push('/(tabs)/programs')}
-              >
-                <Text style={[ss.ctaTxt, { color: theme.bg }]}>Créer mon programme →</Text>
-              </Pressable>
-            </Pressable>
-          )}
+              <Text style={ss2.recovMsg}>{message}</Text>
+            </GlassCard>
+          </View>
         </Animated.View>
 
-        {/* ── 4. SÉANCE LIBRE ─────────────────────────────────────── */}
-        <Animated.View style={[ss.freeLink, sect(3)]}>
-          <Pressable style={ss.freeBtn} onPress={() => router.push('/session/active')}>
-            <Text style={ss.freeTxt}>Séance libre</Text>
-            <Icon name="caretRight" size={12} color={theme.textSecondary} />
-          </Pressable>
+        {/* ── CARTE SÉANCE DU JOUR ────────────────────────────────── */}
+        <Animated.View style={sect(2)}>
+          <GlassCard contentStyle={ss2.progRow}>
+            {todayProgram ? (
+              <>
+                <View style={ss2.progThumb}>
+                  <Icon name="barbell" size={26} color={FIG.ctaBorder} />
+                </View>
+                <View style={ss2.progTextBlock}>
+                  <Text style={ss2.progLabel}>Séance du jour</Text>
+                  <Text style={ss2.progName} numberOfLines={1}>{todayProgram.name}</Text>
+                  {exerciseCount > 0 && (
+                    <Text style={ss2.progMeta}>
+                      {exerciseCount} exercices · {formatDuration(exerciseCount)}
+                    </Text>
+                  )}
+                </View>
+                <GlassButton
+                  label="Commencer"
+                  icon="caretRight"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/session/active',
+                      params: { programId: todayProgram.id },
+                    })
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <View style={ss2.progThumb}>
+                  <Icon name="barbell" size={26} color={theme.textMuted} />
+                </View>
+                <View style={ss2.progTextBlock}>
+                  <Text style={ss2.progLabel}>Séance du jour</Text>
+                  <Text style={[ss2.progName, { opacity: 0.45 }]}>Aucun programme</Text>
+                </View>
+                <GlassButton label="Créer" icon="caretRight" onPress={() => router.push('/(tabs)/programs')} />
+              </>
+            )}
+          </GlassCard>
+        </Animated.View>
+
+        {/* ── SÉANCE LIBRE (swipe) ─────────────────────────────────── */}
+        <Animated.View style={[ss2.swipeWrap, sect(3)]}>
+          <SwipeToStart
+            label="Swipe pour démarrer une séance libre"
+            onComplete={() => router.push('/session/active')}
+          />
         </Animated.View>
 
       </ScrollView>
@@ -223,140 +385,129 @@ export default function SeanceScreen() {
   );
 }
 
-// ── Styles ──────────────────────────────────────────────────────────────────
+// ── Styles statiques (indépendants du thème) ─────────────────────────────────
 
-function getStyles(theme: ReturnType<typeof import('@/lib/theme').useTheme>['theme']) {
+const ss = StyleSheet.create({
+  swipeTrack: {
+    paddingVertical: 15,
+    borderRadius: 999,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  swipeLabel: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#050C0C',
+    letterSpacing: -0.35,
+  },
+  swipeHandle: {
+    position: 'absolute',
+    left: 4,
+    width: HANDLE_SIZE,
+    height: HANDLE_SIZE,
+    borderRadius: HANDLE_SIZE / 2,
+    backgroundColor: 'rgba(5,12,12,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+// ── Styles dépendants du thème ────────────────────────────────────────────────
+
+function getStyles(theme: Theme) {
   return StyleSheet.create({
-    root:   { flex: 1, backgroundColor: theme.bg },
-    scroll: { paddingHorizontal: 20, paddingTop: 10 },
+    root:   { flex: 1, backgroundColor: FIG.screenBg },
+    scroll: { paddingHorizontal: 20, paddingTop: 50, gap: 26 },
 
-    header: { marginTop: 50 },
-    name: {
-      fontFamily: ANTON,
-      fontSize: 70,
-      color: theme.textPrimary,
-      letterSpacing: -1.4,
-      lineHeight: 86,
+    // ── Semaine / streak / avatar ────────────────────────────────────────
+    weekRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+    dayPills: { flexDirection: 'row', gap: 7 },
+    // Le Figma utilise un `drop-shadow` CSS très fin (0.5px de halo marque +
+    // 1px net sur le bord du haut) plutôt qu'une vraie bordure — on
+    // approxime avec un liseré discret, légèrement plus marqué en haut.
+    dayPill: {
+      width: 46, height: 64, borderRadius: 12,
+      backgroundColor: FIG.pillBg,
+      alignItems: 'center', justifyContent: 'center', gap: 7,
+      borderWidth: 1, borderColor: 'rgba(200,241,53,0.16)',
+      borderTopWidth: 1, borderTopColor: 'rgba(200,241,53,0.4)',
     },
-    date: {
-      fontFamily: 'Inter',
-      fontSize: 14,
-      color: theme.textSecondary,
-      letterSpacing: -0.42,
-      marginTop: -8,
+    // "Aujourd'hui" : sur le Figma c'est une lueur *inset* (inset box-shadow),
+    // que RN ne sait pas faire nativement — on s'en approche avec une lueur
+    // externe douce + un léger lavis de couleur au lieu d'une bordure pleine.
+    dayPillToday: {
+      backgroundColor: 'rgba(200,241,53,0.07)',
+      borderColor: 'rgba(200,241,53,0.5)',
+      borderTopColor: FIG.ring,
+      shadowColor: FIG.ring, shadowOpacity: 0.55, shadowRadius: 5, shadowOffset: { width: 0, height: 0 },
     },
+    dayLabel: {
+      fontFamily: 'Inter', fontWeight: '600', fontSize: 12,
+      color: theme.textPrimary, letterSpacing: -0.3,
+    },
+    dayCheck: {
+      width: 21, height: 21, borderRadius: 11,
+      borderWidth: 1.6, borderColor: 'rgba(200,241,53,0.5)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    dayCheckDone: { backgroundColor: theme.brand, borderColor: theme.brand },
 
-    section: { marginTop: 16 },
-
-    card: {
-      backgroundColor: theme.cardBg,
-      borderWidth: 0.5,
-      borderColor: theme.border,
-      borderRadius: 16,
-      padding: 14,
-      flexDirection: 'row',
-      gap: 6,
-      overflow: 'hidden',
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+    streakChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      backgroundColor: FIG.streakChipBg,
+      paddingHorizontal: 10, paddingVertical: 8, borderRadius: 9,
     },
-    cardCol: { flexDirection: 'column', gap: 30 },
-
-    cardLabel: {
-      fontFamily: 'Inter',
-      fontWeight: '600',
-      fontSize: 12,
-      color: theme.textMuted,
-      letterSpacing: -0.36,
-      marginBottom: 0,
+    streakTxt: { fontFamily: 'Inter', fontWeight: '500', fontSize: 13, color: theme.textPrimary },
+    avatarCircle: {
+      width: 42, height: 42, borderRadius: 21,
+      borderWidth: 1.5, borderColor: theme.brand,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: FIG.pillBg,
     },
+    avatarInitial: { fontFamily: 'Inter', fontWeight: '700', fontSize: 16, color: theme.brand },
 
-    recovLeft: {
-      width: 197,
-      gap: 12,
-      justifyContent: 'space-between',
+    // ── Récupération ──────────────────────────────────────────────────────
+    recovRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+    mascotCol: {
+      width: RING_SIZE, height: RING_SIZE,
+      marginTop: -46, marginBottom: -14, marginRight: -14,
+      alignItems: 'center', justifyContent: 'center',
+      zIndex: 2,
     },
+    recovCard: { flex: 1, zIndex: 1 },
+    recovCardContent: {
+      padding: 18, paddingLeft: 28, minHeight: 160, justifyContent: 'center', gap: 8,
+    },
+    recovLabel: { fontFamily: 'Inter', fontWeight: '600', fontSize: 12, color: theme.textPrimary, letterSpacing: -0.36 },
     recovScore: {
-      fontFamily: ANTON,
-      fontSize: 50,
-      color: theme.brand,
-      letterSpacing: -1.5,
-      lineHeight: 65,
+      fontFamily: 'Anton', fontSize: 42, color: theme.textPrimary, letterSpacing: -1,
+      marginTop: -4,
     },
-    recovMsg: {
-      fontFamily: 'Inter',
-      fontSize: 12,
-      color: theme.textSecondary,
-      letterSpacing: -0.36,
-      lineHeight: 17,
-      flex: 1,
-    },
-    gaugeWrap: { alignSelf: 'center' },
+    badge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    badgeTxt: { fontFamily: 'Inter', fontWeight: '600', fontSize: 10, color: FIG.badgeTxt, letterSpacing: -0.3 },
+    recovMsg: { fontFamily: 'Inter', fontWeight: '500', fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 16 },
 
-    progInfo: { gap: 4 },
-    progName: {
-      fontFamily: ANTON,
-      fontSize: 50,
-      color: theme.brand,
-      letterSpacing: -1.5,
-      lineHeight: 65,
+    // ── Séance du jour ───────────────────────────────────────────────────
+    progRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
+    progThumb: {
+      width: 56, height: 56, borderRadius: 10,
+      backgroundColor: FIG.progThumbBg,
+      alignItems: 'center', justifyContent: 'center',
     },
+    progTextBlock: { flex: 1, gap: 4 },
+    progLabel: { fontFamily: 'Inter', fontWeight: '600', fontSize: 10, color: theme.textPrimary, letterSpacing: -0.3 },
+    progName: { fontFamily: 'Inter', fontWeight: '700', fontSize: 16, color: theme.textPrimary, letterSpacing: -0.3 },
+    progMeta: { fontFamily: 'Inter', fontWeight: '500', fontSize: 11, color: 'rgba(255,255,255,0.55)' },
 
-    pills: { flexDirection: 'row', gap: 4, marginTop: 0 },
-    pill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      backgroundColor: theme.brand + '1A',
-      borderRadius: 8,
-      paddingHorizontal: 6,
-      paddingVertical: 3,
-    },
-    pillTxt: {
-      fontFamily: 'Inter',
-      fontSize: 12,
-      color: theme.textSecondary,
-      letterSpacing: -0.36,
-    },
-
-    ctaBtn: {
-      backgroundColor: theme.brand,
-      borderWidth: 1,
-      borderColor: theme.brand,
-      borderRadius: 40,
-      paddingVertical: 10,
-      paddingHorizontal: 8,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: theme.brand,
-      shadowOffset: { width: 0, height: 5 },
-      shadowOpacity: 0.04,
-      shadowRadius: 5.5,
-      elevation: 4,
-    },
-    ctaTxt: {
-      fontFamily: 'Inter',
-      fontWeight: '700',
-      fontSize: 16,
-      color: theme.bg,
-      letterSpacing: -0.64,
-    },
-
-    freeLink: { marginTop: 16, alignItems: 'center' },
-    freeBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 18,
-      paddingVertical: 11,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    freeTxt: {
-      fontFamily: 'Inter',
-      fontWeight: '600',
-      fontSize: 13,
-      color: theme.textSecondary,
-      letterSpacing: -0.3,
-    },
+    // ── Swipe CTA ─────────────────────────────────────────────────────────
+    swipeWrap: { marginTop: 2 },
   });
 }
