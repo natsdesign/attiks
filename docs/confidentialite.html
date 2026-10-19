@@ -26,7 +26,7 @@
 </head>
 <body>
   <h1>Politique de confidentialité</h1>
-  <p class="updated">Dernière mise à jour : 12 octobre 2026</p>
+  <p class="updated">Dernière mise à jour : 14 octobre 2026</p>
 
   <p>Attiks ("nous") accorde une grande importance à la protection de vos données personnelles. Cette politique explique quelles données sont collectées dans l'application Attiks, pourquoi, et comment vous pouvez exercer vos droits.</p>
 
@@ -40,6 +40,7 @@
     <li><strong>Séances d'entraînement :</strong> exercices réalisés, séries, répétitions, charges, historique de progression.</li>
     <li><strong>Bilans de ressenti (facultatifs) :</strong> sommeil, énergie, stress, courbatures et éventuelle douleur renseignés, date du bilan et historique de vos réponses. Ces données sont associées à votre compte et synchronisées pour afficher votre ressenti et des conseils de prudence. Elles ne constituent pas une mesure clinique de récupération.</li>
     <li><strong>Photo de séance (optionnelle) :</strong> la photo choisie ou prise dans l’application est traitée sur votre appareil pour créer la carte de partage. Ce parcours ne l’envoie pas à un service d’IA ni à notre base de données. Si vous la partagez, elle est transmise à l’application ou au destinataire que vous choisissez.</li>
+    <li><strong>Statistiques facultatives :</strong> avec votre accord, étapes de l’onboarding consultées, durée de consultation, actions de navigation, résultat technique de l’inscription et de l’ouverture du paywall, version de l’app et du système. Un identifiant aléatoire permet de relier les étapes sur cet appareil, sans rattachement au compte. Vos réponses, emails, mots de passe, photos, séances et bilans ne sont pas envoyés à PostHog.</li>
     <li><strong>Données d'abonnement :</strong> statut d'abonnement et historique d'achats, gérés par notre prestataire de paiement (RevenueCat). Nous ne recevons jamais vos coordonnées bancaires.</li>
   </ul>
 
@@ -48,6 +49,7 @@
     <li>Vous permettre de choisir, créer et modifier vos programmes d’entraînement</li>
     <li>Afficher un repère estimé de sollicitation musculaire récente, vos bilans de ressenti et votre progression</li>
     <li>Gérer votre compte et votre abonnement</li>
+    <li>Avec votre accord, repérer les étapes où le parcours d’accueil peut être amélioré</li>
     <li>Conserver vos préférences et votre brouillon de séance sur votre appareil</li>
   </ul>
 
@@ -56,10 +58,11 @@
   <ul>
     <li><strong>Supabase</strong> — hébergement de la base de données et authentification. Le projet Attiks est hébergé dans la région européenne eu-west-1.</li>
     <li><strong>RevenueCat</strong> — gestion des abonnements, validation des achats et statistiques d’abonnement liées à l’identifiant de votre compte</li>
+    <li><strong>PostHog</strong> — statistiques du parcours d’accueil, sur le service européen, uniquement après votre accord. Aucun enregistrement de l’écran, capture automatique des saisies ou profil nominatif.</li>
     <li><strong>Apple</strong> — traitement des achats effectués dans l’App Store</li>
   </ul>
   <p>Les emails de connexion et de récupération passent également par les services de messagerie configurés pour l’application. Les prestataires peuvent conserver leurs propres journaux techniques nécessaires à la sécurité et au fonctionnement de leurs services.</p>
-  <p>La collecte analytique PostHog est désactivée dans cette version. Nous ne vendons pas vos données à des tiers.</p>
+  <p>Les statistiques PostHog sont désactivées avant votre choix et en cas de refus. Vous pouvez retirer votre accord dans Profil → Paramètres → Statistiques d’utilisation ; les envois futurs cessent et la file d’attente locale est effacée. Les événements déjà transmis ne sont pas automatiquement supprimés par ce retrait. Nous ne vendons pas vos données à des tiers.</p>
 
   <h2>5. Durée de conservation</h2>
   <p>Les données de votre compte et de vos séances sont conservées tant que votre compte est actif. Vous pouvez supprimer votre compte depuis Profil → Réglages → Supprimer mon compte, ou nous contacter. La suppression du compte ne résilie pas un abonnement Apple : utilisez la gestion des abonnements de votre compte Apple. Les informations de transactions détenues par Apple et RevenueCat et les sauvegardes techniques peuvent suivre des durées de conservation distinctes ; contactez-nous pour une demande portant sur ces données.</p>
