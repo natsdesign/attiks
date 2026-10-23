@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>Confirmation du compte · Attiks</title>
+<style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:#080d04;color:#f5f6ec;font:17px/1.6 system-ui,sans-serif}main{width:min(100%,480px);padding:32px;border:1px solid #303721;border-radius:24px;background:#11170b}.brand{color:#c9f52e;font-weight:900;letter-spacing:.2em}h1{font-size:30px;line-height:1.2}p{color:#bfc5b4}a{color:#c9f52e}.button{display:block;text-align:center;padding:14px 20px;background:#c9f52e;color:#11170b;border-radius:14px;font-weight:750;text-decoration:none;margin:28px 0 16px}.note{font-size:14px}a:focus-visible{outline:3px solid white;outline-offset:5px}</style></head>
+<body><main><div class="brand">ATTIKS</div><h1 id="title">Retrouve ton compte dans Attiks</h1><p id="message" role="status">Ouvre l’application et connecte-toi avec ton adresse e-mail et ton mot de passe.</p><a class="button" href="attiks://login">Ouvrir Attiks</a><p class="note" id="help">Si le bouton ne fonctionne pas sur cet appareil, ouvre Attiks directement sur ton téléphone.</p><a href="support.html">Contacter le support</a><noscript><p>JavaScript est désactivé. Pour vérifier ton compte, essaie de te connecter dans Attiks.</p></noscript></main>
+<script>
+(function(){
+  const hash=new URLSearchParams(location.hash.slice(1));
+  const query=new URLSearchParams(location.search);
+  const error=hash.get('error')||query.get('error');
+  const code=hash.get('error_code')||query.get('error_code');
+  const accepted=Boolean(hash.get('access_token'));
+  // Remove authentication data immediately. No analytics, storage or external requests.
+  history.replaceState(null,'',location.pathname);
+  if(error||code){
+    document.getElementById('title').textContent='Ce lien ne peut plus être utilisé';
+    document.getElementById('message').textContent='Il a peut-être déjà été utilisé ou a expiré. Essaie d’abord de te connecter dans Attiks : ton adresse peut déjà être confirmée.';
+    document.getElementById('help').textContent='Si Attiks indique que ton adresse n’est pas confirmée, contacte le support pour recevoir un nouveau lien. Ne partage pas ton mot de passe.';
+  }else if(accepted){
+    document.getElementById('title').textContent='Ton adresse e-mail est confirmée';
+    document.getElementById('message').textContent='Tu peux maintenant ouvrir Attiks et te connecter avec ton adresse e-mail et ton mot de passe.';
+  }
+})();
+</script></body></html>
